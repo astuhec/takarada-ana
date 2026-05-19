@@ -1,0 +1,27 @@
+{
+    "Nk" : 1000,
+    "include_hartree" : 1,
+    "mu0" : 0.0,
+    "parameters" : {
+        "n_pass" : 1e-2,
+        "epsilon_threshold" : 1e-7,
+        "N_epsilon" : 5,
+        "maxiter" : 500,
+        "eps_last" : 1e-7,
+        "dmu" : 0.5,
+        "mix2" : 0.001,
+        "mix3" : 1.5,
+        "faktor1" : 0.1,
+        "max_trials" : 15,
+        "eps0" : 0.03,
+        },
+    "phys_parameters" : {
+        "t" : 1.0,
+        "t_" : 3.0,
+        "t12" : 0.0,
+        "gap" : -2.5,
+        "Vb" : 2.0,
+        "Vc" : 2.0,
+        "delta" : 0.0
+    }
+}
