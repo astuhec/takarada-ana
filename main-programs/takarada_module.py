@@ -28,6 +28,10 @@ class model:
         self.N_epsilon = self.parameters['N_epsilon']
         self.maxiter = self.parameters['maxiter']
         self.n_pass = self.parameters['n_pass']
+        self.eps_last = self.parameters['eps_last']
+        self.mix2 = self.parameters['mix2']
+        self.mix3 = self.parameters['mix3']
+        self.max_trials = self.parameters['max_trials']
 
         self.mu = params["mu0"]
         self.include_hartree = params["include_hartree"]
@@ -114,8 +118,9 @@ class model:
         self.delta_c_GS = self.delta_c
 
     def next_T(self, maxbrentq=50, mu_initial=None) -> None:
-        
         if mu_initial==None:
+            #rho, err, energije, vecs, _, n, mu = helpers.NewMu(self.rho, self.K, self.hk0, self.Vb, self.Vc, self.T, self.mu, self.dmu, self.maxiter, self.epsilon_threshold, self.eps_last, 0.5, self.mix2, self.mix3, self.n_pass, self.max_trials, faktor1=0.001, include_hartree=self.include_hartree)
+
             mu, rho, err, energije, vecs, _, n = helpers.NewMu2(self.mu - self.dmu, self.mu + self.dmu, self.hk0, self.rho, self.K, self.T, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, mix=0.5, xtol=self.n_pass, rtol=self.n_pass, maxiterbrentq=maxbrentq, n_target=self.n_target)
         else:
             rho, err, energije, vecs, _, n = helpers.Rho_next(self.hk0, self.rho, self.K, self.T, mu_initial, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree)
@@ -127,9 +132,11 @@ class model:
         self.err = err
         self.n = n
         self.mu = mu
+        #print(self.mu)
         self.delta_b, self.delta_c = helpers.Delta(self.K, self.rho, self.Vb, self.Vc)
 
-    def run_Tdependence(self, input_temperature, input_phonon=None, k=None, n=None):
+    def run_Tdependence(self, input_temperature, input_phonon=None, k=None, n=None,
+                        beta_initial=None, scale_initial=None, Nbeta_initial=None):
                         
         with open(input_temperature, "r", encoding="utf-8") as f:
             params_all = json.load(f)
@@ -159,9 +166,9 @@ class model:
         maxbrentq = params_all['maxbrentq']
         Gammas = params_all['Gammas']
         eps_ns0 = params_all['eps_ns0']
-        betas0 = params_all['beta0']
-        scale = params_all['scale']
-        Nbetas = params_all['Nbetas']
+        betas0 = params_all['beta0'] if beta_initial==None else beta_initial
+        scale = params_all['scale'] if scale_initial==None else scale_initial
+        Nbetas = params_all['Nbetas'] if Nbeta_initial==None else Nbeta_initial
         freq_betas = params_all['freq_betas']
         betas = betas0 / scale**np.arange(1, Nbetas+1)
         max_stop = int(Nbetas // freq_betas)
@@ -241,18 +248,18 @@ class model:
                                             gcy=gcy, omega_cy=omega_cy,
                                             Gamma_ph=Gamma_ph, phonon=phonon, n_workers=n_workers)
                         
-                if i > 0:
-                    self.rho = rho_save
-                    self.energije = energije_save
-                    self.vecs = vecs_save
-                    self.mu = mu_save
-                    self.err = err_save
-                    self.n = n_save
+                #if i > 0:
+                #    self.rho = rho_save
+                #    self.energije = energije_save
+                #    self.vecs = vecs_save
+                ##    self.mu = mu_save
+                 #   self.err = err_save
+                 #   self.n = n_save
 
             print(f'Progress {i/len(betas)}. beta={np.round(1/self.T, 3)}, n={np.round(self.n)}, delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}', flush=True)
-
-    def correction(self, input_temperature, input_phonon=None,
-                        threshold=0.02, window=5, safety=10, window0=80, r2_threshold=0.99):
+    
+    def correction(self, input_temperature, Nbeta_initial, scale_initial, input_phonon=None,
+                        threshold=0.02, window=5, safety=10, window0=20, r2_threshold=0.99):
         # find interval where mu(T) makes sense
         stable_index = helpers.is_stable(self.Ts, self.mus, threshold, window) + safety
 
@@ -272,7 +279,7 @@ class model:
         beta_initial = 1/self.Ts[stable_index]
         mu_initial = self.mus[stable_index]
 
-        self.mu = mu_initial
+        self.mu = self.mu_GS
         self.rho = self.rho_GS
         self.vecs = self.vecs_GS
         self.energije = self.energije_GS
@@ -280,7 +287,8 @@ class model:
         self.delta_c = self.delta_c_GS
 
         count = len(self.Ts)
-        self.run_Tdependence(input_temperature, input_phonon=input_phonon, k=k, n=n)
+        self.run_Tdependence(input_temperature, input_phonon=input_phonon, k=k, n=n,
+                             beta_initial=beta_initial, Nbeta_initial=Nbeta_initial, scale_initial=scale_initial)
         self.stable_index = stable_index
         self.Ncorrection = len(self.Ts) - count
 

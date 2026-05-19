@@ -1,13 +1,13 @@
 {
 
-  "beta0": 250,
+  "beta0": 100,
   "scale": 1.005,
-  "Nbetas": 5,
-  "freq_betas": 3,
+  "Nbetas": 200,
+  "freq_betas": 1,
   "Gammas": [0.008],
   "maxbrentq" : 50,
   "params": {
-    "Nomega": 5000,
+    "Nomega": 1000,
     "eps": 1e-4,
     "deg": 500,
     "eps2": 1e-4,

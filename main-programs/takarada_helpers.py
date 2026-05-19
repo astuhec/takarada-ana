@@ -256,6 +256,80 @@ def find_bracket(mu1, mu2, hk0, rho, K, T, phys_parameters, eps0,
         f"Last: mu1={mu1:.4f}, f(mu1)={f1:.4f}, mu2={mu2:.4f}, f(mu2)={f2:.4f}"
     )
 
+def NewMu(rho, K, hk0, Vb, Vc, T, mu, dmu, maxiter, epsilon_threshold, eps_last, mix, mix2, mix3, n_pass, max_trials, faktor1=0.001, include_hartree=True, n_target=1.0):
+    _, err_a, _, _, _, n_a = Rho_next(hk0, rho, K, T, mu, Vb, Vc, 0.0, epsilon_threshold, 0, maxiter, include_hartree, mix)
+    _, err_b, _, _, _, n_b = Rho_next(hk0, rho, K, T, mu + dmu, Vb, Vc, 0.0, epsilon_threshold, 0, maxiter, include_hartree, mix)
+
+    chi = (n_b - n_a)/dmu
+
+    if abs(chi) < 1e-5:
+        step_direction = np.sign(n_a - n_target)
+        mu = mu - 0.1 * dmu * step_direction
+    elif chi != 0:
+        mu = mu - mix2 * (n_a - n_target)/np.abs(chi)
+
+    if np.abs(chi) > 0:
+        faktor = (n_a - n_target)/chi * mix3
+    else:
+        faktor = faktor1
+    if chi >= 0:
+        if n_a >= n_target:
+            sign = -1
+        elif n_a < n_target: sign = +1
+    elif chi < 0:
+        if n_a >= n_target: sign = +1
+        elif n_a < n_target: sign = -1
+    
+    pogoj = False
+    steps = 0
+    enough = False
+
+    sgns = np.ones(2) * np.sign(n_a - n_target)
+    ns = np.array([0, n_a])
+    mus = [0.0, mu]
+
+    while sgns[0] == sgns[1]:
+        if np.abs(n_a - n_target) < n_pass and err_a < eps_last:
+            enough = True
+            break
+        _, err_b, _, _, _, n_b = Rho_next(hk0, rho, K, T, mu + faktor*steps*sign, Vb, Vc, 0.0, epsilon_threshold, 0, maxiter, include_hartree, mix)
+
+        ns[0] = n_b
+        mus[0] = mu + faktor*steps*sign
+        sgns[1] = np.sign(n_b - n_target)
+        if sgns[0] != sgns[1]: break
+        if n_b < n_target and n_b < ns[1]:
+            sign *= -1
+        if n_b > n_target and n_b > ns[1]:
+            sign *= -1
+        ns = np.roll(ns, 1)
+        mus = np.roll(mus, 1)
+        sgns[1] = np.sign(n_b - n_target)
+        steps +=1
+        if np.abs(n_b - n_target) < n_pass and err_b < eps_last:
+            enough = True
+            mu_mid = mu + faktor*steps*sign
+            break
+        
+    mus = np.sort(np.array([mu + faktor*steps*sign, mu + faktor*(steps-1)*sign]))
+    ns = np.sort(np.array(ns))
+
+    trials = 0
+    while pogoj == False:
+        mu_mid = (mus[0] + mus[1])/2
+        if enough == True:
+            break   
+        n_mid = Rho_next(hk0, rho, K, T, mu_mid, Vb, Vc, 0.0, epsilon_threshold, 0, maxiter, include_hartree, mix)[-1]
+        if n_mid > n_target: mus[1] = mu_mid
+        elif n_mid < n_target: mus[0] = mu_mid
+        if np.abs(n_mid - n_target) < n_pass:
+            break
+        trials += 1 
+        if trials > max_trials:
+            break
+    rho, err, energije, vecs, fs, n = Rho_next(hk0, rho, K, T, mu_mid, Vb, Vc, 0.0, epsilon_threshold, 0, maxiter, include_hartree, mix)
+    return rho, err, energije, vecs, fs, n, mu_mid
+
 def NewMu2(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
              epsilon_threshold, N_epsilon, maxiter, include_hartree, mix=0.5, xtol=1e-4, rtol=1e-4, maxiterbrentq=50, n_target=1.0):
     # Auto-fix bracket if needed
@@ -329,3 +403,52 @@ def to_scalar_if_single(x):
     if x.size == 1:
         return float(x.item())
     return x
+
+def is_stable(Ts, mus, threshold=0.02, window=5):
+    stable_from_idx = 0
+    for i in range(len(Ts) - window):
+        local_mus = mus[i:i+window]
+        variation = np.max(local_mus) - np.min(local_mus)
+        if variation < threshold:
+            stable_from_idx = i
+            break
+    stable_from_idx = stable_from_idx + window
+    return stable_from_idx
+
+def find_linear_region(Ts, mus, stable_idx, window=10, r2_threshold=0.99):
+    """
+    Slide a window over T > T_stable, fit linear, check R^2.
+    Linear region = consecutive windows with high R^2.
+    Stop when R^2 drops below threshold.
+    """
+    from scipy.stats import linregress
+        
+    # Only look above stable index
+    T_sub  = Ts[stable_idx:]
+    mu_sub = mus[stable_idx:]
+    
+    r2_values = []
+    T_centers = []
+    
+    for i in range(len(T_sub) - window):
+        T_win  = T_sub[i:i+window]
+        mu_win = mu_sub[i:i+window]
+        
+        slope, intercept, r, p, se = linregress(T_win, mu_win)
+        r2 = r**2
+        r2_values.append(r2)
+        T_centers.append(T_sub[i])
+    
+    r2_values = np.array(r2_values)
+    T_centers = np.array(T_centers)
+    
+    # Find last index where R^2 is still above threshold
+    linear_mask = r2_values >= r2_threshold
+    if not np.any(linear_mask):
+        return None, None
+    
+    last_linear_idx = np.where(linear_mask)[0][-1]
+    T_linear_end    = T_centers[last_linear_idx] + (T_sub[1]-T_sub[0])*window
+    T_linear_start  = T_sub[0] # starts at T_stable
+
+    return T_linear_start, T_linear_end
