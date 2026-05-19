@@ -30,8 +30,15 @@ input_perturbation = DIR + 'examples/example_optical/input_perturbation.json'
 s = module.model(input_file)
 s.run_Tdependence(input_temperature)
 
-results_frozen = s.simulate_perturbation(input_perturbation, do_freeze=False)
-plt.plot(results_frozen['time'], results_frozen['delta_bs'])
+results_dynamic = s.simulate_perturbation(input_perturbation, do_freeze=False)
+results_frozen = s.simulate_perturbation(input_perturbation, do_freeze=True)
+
+fig, ax = plt.subplots(ncols=2, nrows=2, figsize=(10,10))
+ax[0,0].plot(results_frozen['time'], results_frozen['delta_bs'])
+ax[0,0].plot(results_dynamic['time'], results_dynamic['delta_bs'])
+
+ax[0,1].plot(results_frozen['time'], results_frozen['delta_cs'])
+ax[0,1].plot(results_dynamic['time'], results_dynamic['delta_cs'])
 
 
 plt.show()

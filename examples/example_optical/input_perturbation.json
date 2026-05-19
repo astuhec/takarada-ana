@@ -11,6 +11,6 @@
     "perturbation_operator" : "current",
     "measure_provider" : "current",
     "verbose" : 1,
-    "freq_verbose" : 10
+    "freq_verbose" : 300
 }
 

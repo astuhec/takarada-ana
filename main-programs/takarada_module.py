@@ -113,7 +113,7 @@ class model:
         self.delta_b_GS = self.delta_b
         self.delta_c_GS = self.delta_c
 
-    def next_T(self, show_print=None, maxbrentq=50, mu_initial=None) -> None:
+    def next_T(self, maxbrentq=50, mu_initial=None) -> None:
         
         if mu_initial==None:
             mu, rho, err, energije, vecs, _, n = helpers.NewMu2(self.mu - self.dmu, self.mu + self.dmu, self.hk0, self.rho, self.K, self.T, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, mix=0.5, xtol=self.n_pass, rtol=self.n_pass, maxiterbrentq=maxbrentq, n_target=self.n_target)
@@ -128,7 +128,6 @@ class model:
         self.n = n
         self.mu = mu
         self.delta_b, self.delta_c = helpers.Delta(self.K, self.rho, self.Vb, self.Vc)
-        if show_print == None: print(1/self.T, err, n, self.delta_b.real, self.delta_c.real, flush=True)
 
     def run_Tdependence(self, input_temperature, input_phonon=None, k=None, n=None):
                         
@@ -189,7 +188,6 @@ class model:
         print('started', flush=True)
         for i, beta in enumerate(betas):
             eps_ns = max(self.errors) if len(self.errors) > 0 else eps_ns0
-            print(f'{i/len(betas)}', flush=True)
             self.T = 1/beta
             if i not in stops:
                 if (i+1) in stops:
@@ -250,6 +248,8 @@ class model:
                     self.mu = mu_save
                     self.err = err_save
                     self.n = n_save
+
+            print(f'Progress {i/len(betas)}. beta={np.round(1/self.T, 3)}, n={np.round(self.n)}, delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}', flush=True)
 
     def correction(self, input_temperature, input_phonon=None,
                         threshold=0.02, window=5, safety=10, window0=80, r2_threshold=0.99):
