@@ -7,7 +7,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy import linalg as LA
 
-from takarada_helpers import parameters
+from takarada_helpers import parameters, h_k, Delta, delta_approximation
 
 ''' current operator '''
 @njit(cache=True)
@@ -384,13 +384,6 @@ def fd_1(eps_or_omega, T, mu=0.0):
     exp_x = np.exp(x_clipped)
     return - exp_x / (T * (1 + exp_x)**2)
 
-''' approximation for Dirac delta function '''
-def delta_approximation(x, width, shape='Gaussian'):
-    if shape == 'Gaussian':
-        return 1/(2*np.pi*width**2)**0.5 * np.exp(-x**2/(2*width**2))
-    elif shape == 'Lorentzian':
-        return 1/np.pi * width/(x**2 + width**2)
-
 ''' Boltzmann transport function'''
 def phi_Boltzmann(K, energije, mu, omegas, faktor=0.2, shape='Gaussian'):
     Nk = len(K)
@@ -589,11 +582,10 @@ def compile_measure_provider(measure_provider):
 
     return static_ops, dynamic_providers
 
-def simulate_pulz(K, hk0, rho, phys_parameters, include_hartree,
+def simulate_pulz(K, hk0, rho, Vb, Vc, include_hartree,
                   perturbation_operator, measure_provider,
                   A0, t0, sigma, Omega, dt, t_max,
-                  do_freeze, Ncorr, tol, geom, phases, g_ffts, Gamma=0.0):
-    _, _, _, _, _, _, Vb, Vc, _ = phys_parameters
+                  do_freeze, Ncorr, tol, geom, phases, g_ffts, Gamma=0.0, verbose=True, freq_verbose=50):
     N_points = int(t_max/dt)
     Nk = len(K)
     rho_eq = np.copy(rho)
@@ -628,19 +620,21 @@ def simulate_pulz(K, hk0, rho, phys_parameters, include_hartree,
         Nop = measure_operators.shape[0]
 
     rho0 = np.copy(rho)
-    H0 = h_k(K, hk0, rho0, phys_parameters, 0., include_hartree)
+    H0 = h_k(K, hk0, rho0, Vb, Vc, 0.0, include_hartree)
 
     rho_expvals = np.zeros((Nop, N_points), dtype=np.complex128)
     rho_norms = np.zeros(N_points)
     Delta_bs = np.zeros(N_points, dtype=np.complex128)
     Delta_cs = np.zeros(N_points, dtype=np.complex128)
+    ns0 = np.zeros(N_points)
+    ns1 = np.zeros(N_points)
 
     ts = dt * np.arange(N_points)
 
     for i in range(N_points):
 
-        if i % 50 == 0:
-            print(i/N_points, flush=True)
+        if verbose and i % freq_verbose == 0:
+            print(f'Progress: {i/N_points}', flush=True)
 
         A_t = A_pulz(i * dt, A0, t0, sigma, Omega)
         A_half = A_pulz(i * dt + dt/2, A0, t0, sigma, Omega)
@@ -649,8 +643,7 @@ def simulate_pulz(K, hk0, rho, phys_parameters, include_hartree,
         if do_freeze:
             H_k0 = H0
         else:
-            H_k0 = h_k(K, hk0, rho, phys_parameters, 0., include_hartree)
-
+            H_k0 = h_k(K, hk0, rho,Vb, Vc, 0., include_hartree)
         # ------------------
         # Predictor
         # ------------------
@@ -665,7 +658,7 @@ def simulate_pulz(K, hk0, rho, phys_parameters, include_hartree,
         if do_freeze:
             H_k1 = H0
         else:
-            H_k1 = h_k(K, hk0, rho_pred, phys_parameters, 0., include_hartree)
+            H_k1 = h_k(K, hk0, rho_pred, Vb, Vc, 0., include_hartree)
 
         rho_guess = rho_pred
 
@@ -691,7 +684,7 @@ def simulate_pulz(K, hk0, rho, phys_parameters, include_hartree,
                 break
 
             if not do_freeze:
-                H_k1 = h_k(K, hk0, rho_guess, phys_parameters, 0., include_hartree)
+                H_k1 = h_k(K, hk0, rho_guess, Vb, Vc, 0., include_hartree)
 
         rho = rho_guess
 
@@ -720,7 +713,9 @@ def simulate_pulz(K, hk0, rho, phys_parameters, include_hartree,
         rho_expvals[:,i] = measurement_t
         rho_norms[i] = norm(rho)
         Delta_bs[i], Delta_cs[i] = Delta(K, rho, Vb, Vc)
-
+        ns0[i] = np.sum(rho[0,0]).real / Nk
+        ns1[i] = np.sum(rho[1,1]).real / Nk
+        
     return ts, rho_expvals, rho_norms, Delta_bs, Delta_cs
 
 ''' susceptibility obtained from temporal response, using Fourier transform. window exp(-eta*t) is applied '''
@@ -789,24 +784,6 @@ def local_minima(arr):
         indices.append(i)
         vals.append(arr[i])
     return np.array(indices), np.array(vals)
-
-def local_maxima(arr):
-    n = len(arr)
-    indices, vals = [], []
-    for i in range(n):
-        if i > 0 and arr[i] <= arr[i - 1]:
-            continue
-        if i < n - 1 and arr[i] <= arr[i + 1]:
-            continue
-        indices.append(i)
-        vals.append(arr[i])
-    return np.array(indices), np.array(vals)
-
-def to_scalar_if_single(x):
-    x = np.asarray(x)
-    if x.size == 1:
-        return float(x.item())
-    return x
 
 ''' Pauli matrices '''
 sigmas = np.zeros((4, 2, 2), dtype=np.complex128)
@@ -1219,6 +1196,10 @@ def get_dc_coefficient(omegas, chi_imag, omega_cutoff=None):
 
     return alpha, beta
 
+def find_DC_limit(omega0, chi_imag):
+    left, right = find_flat_regime(omega0, chi_imag)
+    return get_dc_coefficient(omega0[left:right], chi_imag[left:right])[0]
+    
 # adding phonon
 def D0(omega, omega_ph, Gamma_ph):
     return 2 * omega_ph / ((omega + 1j * Gamma_ph)**2 - omega_ph**2)

@@ -8,7 +8,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy import linalg as LA
 
-''' this function is called when I create current operators '''
+''' this function is called when I create free Hamiltonian and current operators '''
 @njit(cache=True)
 def parameters(b, t, t_, t12, Vb, Vc, delta=0):
     ''' delta, orb1, orb2, hopping '''
@@ -97,23 +97,6 @@ def Gap_tilde(rho, phys_parameters):
     gaptilde = gap0 + (Vb + Vc) * (n0 - n1)
     return gaptilde
 
-def Gap_infty(Nk, phys_parameters, parameters1, include_hartree):
-    _, _, _, _, _, _, Vb, Vc, _ = phys_parameters
-    new_parameters1 = parameters1.copy()
-    new_parameters1["eps0"] = 0.
-    m = mt.model(Nk, 0., phys_parameters, new_parameters1, new_parameters1, include_hartree, True)
-    m.GS()
-    hk = m.hk0.copy()
-    if include_hartree == True:
-        hk[0,0,:] += (Vb + Vc) * np.sum(m.rho[1,1,:]) / Nk
-        hk[1,1,:] += (Vb + Vc) * np.sum(m.rho[0,0,:]) / Nk
-    energy_infty = np.zeros((2, Nk))
-    energy_infty[0] = hk[0,0].real
-    energy_infty[1] = hk[1,1].real
-    mu_infty = m.mu
-    gap_infty = np.min(hk[1,1]) - np.max(hk[0,0])
-    return energy_infty, mu_infty, gap_infty
-
 ''' kinetic (fixed) part of the Hamiltonian; for me delta is always zero '''
 def h_k0(K, phys_parameters):
     b, t, t_, t12, epsilon, epsilon_, Vb, Vc, delta = phys_parameters
@@ -141,7 +124,7 @@ def Delta(K, rho, Vb, Vc):
     deltas = [0., 1.]
     phi_b = np.sum(rho[1,0] * np.exp(-1j*K * deltas[0]))
     phi_c = np.sum(rho[1,0]  * np.exp(-1j*K * deltas[1]))
-    return - np.array([Vb * phi_b, Vc * phi_c]) / Nk
+    return - np.array([Vb * phi_b, Vc * phi_c], dtype=np.complex128) / np.float64(Nk)
 
 ''' full hamiltonian, built from kinetic part hk0 and the self-energy
 if include_hartree=True, I add also Hartree self-energy,
@@ -168,6 +151,11 @@ def h_k(K, hk0, rho, Vb, Vc, eps0, include_hartree):
         hk[0,1,:] += eps0 * np.exp(-1j*K)
         hk[1,0,:] += - eps0 * np.exp(1j*K)
     return hk
+
+''' Fermi-Dirac function '''
+@njit
+def fd(eps, mu, T):
+    return 1.0 / (np.exp((eps - mu) / T) + 1.0)
 
 ''' diagonalization of the hamiltonian '''
 def H_diagonalize(hamiltonian, K, T, mu):
@@ -241,7 +229,8 @@ def find_bracket(mu1, mu2, hk0, rho, K, T, phys_parameters, eps0,
     """
     Expand [mu1, mu2] outward until f(mu1) and f(mu2) have opposite signs.
     """
-    args = (hk0, rho, K, T, phys_parameters, eps0,
+    Vb, Vc = phys_parameters
+    args = (hk0, rho, K, T, Vb, Vc, eps0,
             epsilon_threshold, N_epsilon, maxiter, include_hartree, mix)
     
     f1 = f_newmu(mu1, *args)
@@ -267,19 +256,19 @@ def find_bracket(mu1, mu2, hk0, rho, K, T, phys_parameters, eps0,
         f"Last: mu1={mu1:.4f}, f(mu1)={f1:.4f}, mu2={mu2:.4f}, f(mu2)={f2:.4f}"
     )
 
-def NewMu2(mu1, mu2, hk0, rho, K, T, phys_parameters, eps0,
+def NewMu2(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
              epsilon_threshold, N_epsilon, maxiter, include_hartree, mix=0.5, xtol=1e-4, rtol=1e-4, maxiterbrentq=50, n_target=1.0):
     # Auto-fix bracket if needed
     try:
-        mu1, mu2 = find_bracket(mu1, mu2, hk0, rho, K, T, phys_parameters, eps0,
+        mu1, mu2 = find_bracket(mu1, mu2, hk0, rho, K, T, (Vb, Vc), eps0,
                                 epsilon_threshold, N_epsilon, maxiter, include_hartree, mix)
     except ValueError as e:
         print(f"Warning: {e}")
         raise
-    mu_star = brentq(f_newmu, mu1, mu2, args=(hk0, rho, K, T, phys_parameters, eps0,
+    mu_star = brentq(f_newmu, mu1, mu2, args=(hk0, rho, K, T, Vb, Vc, eps0,
                                               epsilon_threshold, N_epsilon, maxiter, include_hartree, mix, n_target),
                      xtol=xtol, rtol=rtol, maxiter=maxiterbrentq)
-    rho_final, err, energije, vecs, fs, n = Rho_next(hk0, rho, K, T, mu_star, phys_parameters[6], phys_parameters[7], eps0, epsilon_threshold, N_epsilon,
+    rho_final, err, energije, vecs, fs, n = Rho_next(hk0, rho, K, T, mu_star, Vb, Vc, eps0, epsilon_threshold, N_epsilon,
                                                           maxiter, include_hartree, mix=mix)
     return mu_star, rho_final, err, energije, vecs, fs, n
 
@@ -322,3 +311,21 @@ def delta_approximation(x, width, shape='Gaussian'):
         return 1/(2*np.pi*width**2)**0.5 * np.exp(-x**2/(2*width**2))
     elif shape == 'Lorentzian':
         return 1/np.pi * width/(x**2 + width**2)
+    
+def local_maxima(arr):
+    n = len(arr)
+    indices, vals = [], []
+    for i in range(n):
+        if i > 0 and arr[i] <= arr[i - 1]:
+            continue
+        if i < n - 1 and arr[i] <= arr[i + 1]:
+            continue
+        indices.append(i)
+        vals.append(arr[i])
+    return np.array(indices), np.array(vals)
+
+def to_scalar_if_single(x):
+    x = np.asarray(x)
+    if x.size == 1:
+        return float(x.item())
+    return x
