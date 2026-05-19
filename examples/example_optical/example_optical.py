@@ -20,6 +20,7 @@ print('Running on computer: ' + DIR)
 sys.path.insert(0, DIR + 'main-programs/')
 import takarada_module as module
 import takarada_helpers as helpers
+import takarada_tokovi as tokovi
 
 input_file = DIR + 'examples/example_optical/input.json'
 input_temperature = DIR + 'examples/example_optical/input_temperature.json'
@@ -29,4 +30,9 @@ input_perturbation = DIR + 'examples/example_optical/input_perturbation.json'
 s = module.model(input_file)
 s.run_Tdependence(input_temperature)
 
-s.simulate_perturbation(input_perturbation, )
+results_frozen = s.simulate_perturbation(input_perturbation, do_freeze=False)
+plt.plot(results_frozen['time'], results_frozen['delta_bs'])
+
+
+plt.show()
+#tokovi.susceptibility(results['times'], results['measurement'].real, results['pulz'], eta, omega_cut, s.Nk)

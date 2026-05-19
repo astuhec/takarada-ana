@@ -413,7 +413,9 @@ class model:
         results = tokovi.compute_chi(omegas, self.Nk, Gamma, self.mu / Gamma, self.T / Gamma, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=False)
         return results
 
-    def simulate_perturbation(self, input_perturbation):
+    def simulate_perturbation(self, input_perturbation, do_freeze=None):
+        if do_freeze == None:
+            print(f'Choose do_freeze=True or False', flush=True)
 
         with open(input_perturbation, "r", encoding="utf-8") as f:
             params = json.load(f)
@@ -423,7 +425,6 @@ class model:
         Omega0 = params['Omega0']
         dt = params['dt']
         t_max = params['t_max']
-        do_freeze = params['do_freeze']
         Ncorr = params['Ncorr']
         tol = params['tol']
         Gamma_ = params['Gamma_']

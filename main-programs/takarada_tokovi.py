@@ -716,7 +716,7 @@ def simulate_pulz(K, hk0, rho, Vb, Vc, include_hartree,
         ns0[i] = np.sum(rho[0,0]).real / Nk
         ns1[i] = np.sum(rho[1,1]).real / Nk
         
-    return ts, rho_expvals, rho_norms, Delta_bs, Delta_cs
+    return ts, rho_expvals, rho_norms, Delta_bs, Delta_cs, ns0, ns1
 
 ''' susceptibility obtained from temporal response, using Fourier transform. window exp(-eta*t) is applied '''
 def susceptibility(time, signal, probe, eta, omega_cut, Nk):
