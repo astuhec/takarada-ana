@@ -104,8 +104,8 @@ ax[1,0].set_ylabel(r'$<j(t)>$', fontsize=15)
 # optical conductivity (real component)
 omegas = results_frozen['omegas']       # same for dynamic, frozen
 
-omega_cut = max(omegas0)
-eta = 1/ t[-1] * 5.0
+omega_cut = max(omegas0)                # maximum frequency
+eta = 1/ t[-1]                          # damping factor in Fourier transform
 
 omegas, Re_sigma_frozen = tokovi.optical_conductivity(t, current_frozen, perturbation, eta, omega_cut, s.Nk)
 omegas, Re_sigma_dynamic = tokovi.optical_conductivity(t, current_dynamic, perturbation, eta, omega_cut, s.Nk)
