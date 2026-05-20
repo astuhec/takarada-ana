@@ -1,6 +1,6 @@
 {
     /* physical properties of the model */ 
-    "Nk" : 1000,
+    "Nk" : 2000,
     "phys_parameters" : {
         "b" : 0.0,
         "t" : 1.0,
@@ -62,10 +62,10 @@
         "sigma" : 0.05,
         "Omega0" : 0.0,
         "dt" : 0.01,
-        "t_max" : 200,
+        "t_max" : 400,
         "Ncorr" : 10,
         "tol" : 1e-5,
-        "Gamma_" : 0.0, 
+        "Gamma_" : 0.008, 
         "perturbation_operator" : "current",
         "measure_provider" : "current",
         "verbose" : 1,

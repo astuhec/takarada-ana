@@ -31,7 +31,7 @@
         },
 
     /* input for self-consistent determination of rho(T), mu(T) */ 
-    "beta0": 50,               // starting beta
+    "beta0": 200,               // starting beta
     "scale": 1.005,             // beta_{i+1} = beta_{i} / scale
     "Nbetas": 200,              // last beta is beta0 / scale**Nbetas
     "freq_betas": 3,            // calculate transport every freq_betas

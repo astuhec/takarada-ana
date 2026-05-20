@@ -1069,8 +1069,6 @@ def compute_chi(
 
     chi_rhoj0_arr = np.zeros((N_om, Nop), dtype=np.complex128)
 
-    t_total = time.time()
-
     def _worker(om_idx, om):
         result = compute_single_om_fused(
             om,        # om = frequency value, omegas = full array
@@ -1108,9 +1106,6 @@ def compute_chi(
                 msg = f'Progress: {(om_idx+1)/N_om}'
                 print('\r' + msg + ' ' * (80 - len(msg)), end='', flush=True)
                 
-    if verbose:
-        print(f"\nTotal time: {time.time() - t_total:.2f}s")
-
     results = {'chi0' : chi0_arr,
                'chi' : chi_rpa_arr,
 

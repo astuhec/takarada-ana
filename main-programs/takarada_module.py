@@ -428,6 +428,8 @@ class model:
         self.L12q_corr.append(helpers.to_scalar_if_single(l12q))
 
     def optical_response(self):
+        print('-' * 80 + '\n' + \
+              'Started calculation of RPA responses.', flush=True)
         params = self.config.get("params_RPA")
         deg = params["deg"]
         Gamma = params["Gamma"]
@@ -451,10 +453,12 @@ class model:
         results["T"] = self.T
         results["mu"] = self.mu
         results["omegas"] = omegas
+        print('\n' + 'Finished calculation of RPA responses.', flush=True)
         return results
 
     def simulate_perturbation(self, do_freeze=None):
-
+        print('-' * 80 + '\n' + \
+              'Started simulation of perturbation.', flush=True)
         params = self.config.get("params_perturbation")
         A0 = params['A0']
         t0 = params['t0']
@@ -500,6 +504,7 @@ class model:
         omegas, Re_sigma = tokovi.optical_conductivity(times, measurement[0], pulz, eta, omega_cut, self.Nk)
         results["omegas"] = omegas
         results["Re_sigma"] = Re_sigma
+        print('\n' + 'Finished simulation of perturbation.', flush=True)
         return results        
 
     def merge(self, arr):
