@@ -5,7 +5,9 @@ from scipy.special import roots_legendre
 import matplotlib.pyplot as plt
 
 ####################################################################################################################
-## This example shows how to run 
+## This example shows how to obtain optical conductivity with and without vertex corrections, two ways:
+## (1) using RPA equations
+## (2) performing a tdHF simulation.
 ####################################################################################################################
 
 #''' Add path to programs and parameters '''
