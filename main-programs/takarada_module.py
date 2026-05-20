@@ -1,27 +1,32 @@
 import numpy as np
-import sys
+import json5
 from scipy.special import roots_legendre
 import json
 
 import takarada_helpers as helpers
 import takarada_tokovi as tokovi
 
+def load_config(path):
+    with open(path, 'r', encoding="utf-8") as f:
+        return json5.load(f)
+            
 ''' Takarada model '''
 class model:
     def __init__(self, input_file, compute_gap_infty=True, verbose=True):
         
         ''' read input parameter and initialize the system '''
-        with open(input_file, "r", encoding="utf-8") as f:
-            params = json.load(f)
+    
+        config = load_config(input_file)
+        self.config = config
 
-        self.Nk = params["Nk"]
+        self.Nk = config.get("Nk")
         if verbose:
             print(f'=' * 80 + '\n' + 'Started 2-orbital calculation' + '\n' + f'=' * 80, flush=True)
             print(f'Initialized 1d lattice with Nk={self.Nk} unit cells.', flush=True)
      
         self.K = 2*np.pi * np.arange(-self.Nk//2, self.Nk//2) / self.Nk
      
-        self.parameters = params["parameters"]
+        self.parameters = config.get("parameters")
         self.eps0 = self.parameters['eps0']
         self.dmu = self.parameters['dmu']
         self.epsilon_threshold = self.parameters['epsilon_threshold']
@@ -33,11 +38,11 @@ class model:
         self.mix3 = self.parameters['mix3']
         self.max_trials = self.parameters['max_trials']
 
-        self.mu = params["mu0"]
-        self.include_hartree = params["include_hartree"]
-        self.n_target = params["n_target"]
+        self.mu = config.get("mu0")
+        self.include_hartree = config.get("include_hartree")
+        self.n_target = config.get("n_target")
         
-        self.phys_parameters = params["phys_parameters"]
+        self.phys_parameters = config.get("phys_parameters")
         self.b = self.phys_parameters["b"]
         self.t = self.phys_parameters["t"]
         self.t_ = self.phys_parameters["t_"]
@@ -52,7 +57,7 @@ class model:
         self.hk0 = helpers.h_k0(self.K, self.phys_parameters)
 
         if compute_gap_infty:
-            self.energy_infty, self.mu_infty, self.gap_infty = Gap_infty(input_file, self.Vb, self.Vc, self.parameters, self.include_hartree)
+            self.energy_infty, self.mu_infty, self.gap_infty = Gap_infty(input_file, self.parameters, self.include_hartree)
         
         ''' Find ground state '''
         self.GS()
@@ -135,14 +140,14 @@ class model:
         #print(self.mu)
         self.delta_b, self.delta_c = helpers.Delta(self.K, self.rho, self.Vb, self.Vc)
 
-    def run_Tdependence(self, input_temperature, input_phonon=None, k=None, n=None,
-                        beta_initial=None, scale_initial=None, Nbeta_initial=None):
+    def run_Tdependence(self, input_phonon=None, k=None, n=None,
+                        beta=None, scale=None, Nbeta=None):
                         
-        with open(input_temperature, "r", encoding="utf-8") as f:
-            params_all = json.load(f)
+        ''' read input parameter and initialize the system '''
+        config = self.config
 
-        evaluate_transport_DC = params_all['evaluate_transport_DC']
-        evaluate_vertex_DC = params_all['evaluate_vertex_DC']
+        evaluate_transport_DC = config.get("evaluate_transport_DC")
+        evaluate_vertex_DC = config.get("evaluate_vertex_DC")
 
         print('Started to find temperature dependence of transport coefficients.', flush=True)
         if evaluate_transport_DC == True:
@@ -152,7 +157,7 @@ class model:
         if evaluate_transport_DC == False and evaluate_vertex_DC == False:
             print('Will not calculate transport coefficients, but will find self-consistent rho(T) and mu(T).', flush=True)
 
-        params = params_all['params']
+        params = config.get("params")
         Nomega = params['Nomega']
         eps = params['eps']
         omega0_low = params['omega0_low']
@@ -163,30 +168,31 @@ class model:
         deg = params['deg']
         n_workers = params['n_workers']
 
-        maxbrentq = params_all['maxbrentq']
-        Gammas = params_all['Gammas']
-        eps_ns0 = params_all['eps_ns0']
-        betas0 = params_all['beta0'] if beta_initial==None else beta_initial
-        scale = params_all['scale'] if scale_initial==None else scale_initial
-        Nbetas = params_all['Nbetas'] if Nbeta_initial==None else Nbeta_initial
-        freq_betas = params_all['freq_betas']
+        maxbrentq = config.get("maxbrentq")
+        Gammas = config.get("Gammas")
+        eps_ns0 = config.get("eps_ns0")
+        betas0 = config.get("beta0") if beta==None else beta
+        scale = config.get("scale") if scale==None else scale
+        Nbetas = config.get("Nbetas") if Nbeta==None else Nbeta
+        freq_betas = config.get("freq_betas")
         betas = betas0 / scale**np.arange(1, Nbetas+1)
         max_stop = int(Nbetas // freq_betas)
         stops = [freq_betas*i for i in range(1, max_stop+1)]
-        phonon = params_all['phonon']
+        phonon = config.get("phonon")
 
         if phonon:
-            with open(input_phonon, "r", encoding="utf-8") as f:
-                phonon_params = json.load(f)
-            gbx = phonon_params['gbx']
-            gby = phonon_params['gby']
-            gcx = phonon_params['gcx']
-            gcy = phonon_params['gcy']
-            omega_bx = phonon_params['omega_bx']
-            omega_by = phonon_params['omega_by']
-            omega_cx = phonon_params['omega_cx']
-            omega_cy = phonon_params['omega_cy']
-            Gamma_ph = phonon_params['Gamma_ph']
+
+            config_phonon = load_config(input_phonon)
+
+            gbx = config_phonon.get("gbx")
+            gby = config_phonon.get("gby")
+            gcx = config_phonon.get("gcx")
+            gcy = config_phonon.get("gcy")
+            omega_bx = config_phonon.get("omega_bx")
+            omega_by = config_phonon.get("omega_by")
+            omega_cx = config_phonon.get("omega_cx")
+            omega_cy = config_phonon.get("omega_cy")
+            Gamma_ph = config_phonon.get("Gamma_ph")
 
         if evaluate_vertex_DC:
             nodes, weights = roots_legendre(deg)
@@ -248,19 +254,24 @@ class model:
                                             gcy=gcy, omega_cy=omega_cy,
                                             Gamma_ph=Gamma_ph, phonon=phonon, n_workers=n_workers)
                         
-                #if i > 0:
-                #    self.rho = rho_save
-                #    self.energije = energije_save
-                #    self.vecs = vecs_save
-                ##    self.mu = mu_save
-                 #   self.err = err_save
-                 #   self.n = n_save
+                if i > 0:
+                    self.rho = rho_save
+                    self.energije = energije_save
+                    self.vecs = vecs_save
+                    self.mu = mu_save
+                    self.err = err_save
+                    self.n = n_save
 
-            print(f'Progress {i/len(betas)}. beta={np.round(1/self.T, 3)}, n={np.round(self.n)}, delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}', flush=True)
+            if i % 10 == 0:
+                msg = f'Progress {i/len(betas)}. beta={np.round(1/self.T, 3)}, n={np.round(self.n)}, delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}'
+                print('\r' + msg + ' ' * (80 - len(msg)), end='', flush=True)
     
-    def correction(self, input_temperature, Nbeta_initial, scale_initial, input_phonon=None,
+    def correction(self, input_phonon=None,
                         threshold=0.02, window=5, safety=10, window0=20, r2_threshold=0.99):
         # find interval where mu(T) makes sense
+
+        Nbeta_correction = self.config.get("Nbeta_correction")
+        scale_correction = 1/self.config.get("scale")
         stable_index = helpers.is_stable(self.Ts, self.mus, threshold, window) + safety
 
         # find interval above T_stable where mu(T) is linear. this will serve as approximation for mu(T) at T < T_stable
@@ -287,8 +298,8 @@ class model:
         self.delta_c = self.delta_c_GS
 
         count = len(self.Ts)
-        self.run_Tdependence(input_temperature, input_phonon=input_phonon, k=k, n=n,
-                             beta_initial=beta_initial, Nbeta_initial=Nbeta_initial, scale_initial=scale_initial)
+        self.run_Tdependence(input_phonon=input_phonon, k=k, n=n,
+                             beta=beta_initial, Nbeta=Nbeta_correction, scale=scale_correction)
         self.stable_index = stable_index
         self.Ncorrection = len(self.Ts) - count
 
@@ -416,17 +427,35 @@ class model:
         self.L12q_0.append(helpers.to_scalar_if_single(l12q_0))
         self.L12q_corr.append(helpers.to_scalar_if_single(l12q))
 
-    def optical_response(self, deg, Gamma, omegas):
+    def optical_response(self):
+        params = self.config.get("params_RPA")
+        deg = params["deg"]
+        Gamma = params["Gamma"]
+        eps = params["eps"]
+        n_workers = params["n_workers"]
+
+        omega_low = params["omega_low"]
+        omega_high = params["omega_high"]
+        omega_len = params["omega_len"]
+        space = params["space"]
+        if space == "lin":
+            omegas = np.linspace(omega_low, omega_high, omega_len)
+        elif space == "log":
+            omegas = np.logspace(omega_low, omega_high, omega_len)
+
         nodes, weights = roots_legendre(deg)
-        results = tokovi.compute_chi(omegas, self.Nk, Gamma, self.mu / Gamma, self.T / Gamma, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=False)
+        mu_ = self.mu / Gamma
+        invt = Gamma / self.T
+        results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps)
+        results["Gamma"] = Gamma
+        results["T"] = self.T
+        results["mu"] = self.mu
+        results["omegas"] = omegas
         return results
 
-    def simulate_perturbation(self, input_perturbation, do_freeze=None):
-        if do_freeze == None:
-            print(f'Choose do_freeze=True or False', flush=True)
+    def simulate_perturbation(self, do_freeze=None):
 
-        with open(input_perturbation, "r", encoding="utf-8") as f:
-            params = json.load(f)
+        params = self.config.get("params_perturbation")
         A0 = params['A0']
         t0 = params['t0']
         sigma = params['sigma']
@@ -438,6 +467,8 @@ class model:
         Gamma_ = params['Gamma_']
         verbose = params['verbose']
         freq_verbose = params['freq_verbose']
+        eta = params['eta']
+        omega_cut = params['omega_cut']
 
         if params["perturbation_operator"] == 'current':
             perturbation_operator = self.current
@@ -455,14 +486,20 @@ class model:
                                                                                        do_freeze, Ncorr, tol, self.geom, self.phases, self.g_ffts, Gamma=Gamma_, verbose=verbose, freq_verbose=freq_verbose)
         
         pulz = tokovi.A_pulz(times, A0, t0, sigma, Omega0)
-        results = {'time' : times,
-                   'measurement' : measurement,
-                   'pulz' : pulz,
-                   'norma' : norma,
-                   'delta_bs' : delta_bs,
-                   'delta_cs' : delta_cs,
-                   'ns0' : ns0,
-                   'ns1' : ns1}
+        results = {"time" : times,
+                   "measurement" : measurement,
+                   "pulz" : pulz,
+                   "norma" : norma,
+                   "delta_bs" : delta_bs,
+                   "delta_cs" : delta_cs,
+                   "ns0" : ns0,
+                   "ns1" : ns1,
+                   "T" : self.T,
+                   "mu" : self.mu}
+        
+        omegas, Re_sigma = tokovi.optical_conductivity(times, measurement[0], pulz, eta, omega_cut, self.Nk)
+        results["omegas"] = omegas
+        results["Re_sigma"] = Re_sigma
         return results        
 
     def merge(self, arr):
@@ -510,10 +547,11 @@ class model:
             data["L12q_corr"] = self.merge(self.L12q_corr)
         return data
     
-def Gap_infty(input_file, Vb, Vc, parameters, include_hartree):
+def Gap_infty(input_file, parameters, include_hartree):
     new_parameters1 = parameters.copy()
     new_parameters1["eps0"] = 0.
     m = model(input_file, compute_gap_infty=False, verbose=False)
+    m.GS()  # Compute ground state to populate m.rho
     hk = m.hk0.copy()
     if include_hartree == True:
         hk[0,0,:] += (m.Vb + m.Vc) * np.sum(m.rho[1,1,:]) / m.Nk

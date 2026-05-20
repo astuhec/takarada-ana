@@ -223,13 +223,12 @@ def f_newmu(mu, hk0, rho, K, T, Vb, Vc, eps0,
     _, _, _, _, _, n = Rho_next(hk0, rho, K, T, mu, Vb, Vc, eps0, epsilon_threshold, N_epsilon, maxiter, include_hartree, mix)
     return n - n_target
 
-def find_bracket(mu1, mu2, hk0, rho, K, T, phys_parameters, eps0,
+def find_bracket(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
                  epsilon_threshold, N_epsilon, maxiter, include_hartree, mix,
                  max_expand=20, expand_factor=2.0):
     """
     Expand [mu1, mu2] outward until f(mu1) and f(mu2) have opposite signs.
     """
-    Vb, Vc = phys_parameters
     args = (hk0, rho, K, T, Vb, Vc, eps0,
             epsilon_threshold, N_epsilon, maxiter, include_hartree, mix)
     
@@ -334,7 +333,7 @@ def NewMu2(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
              epsilon_threshold, N_epsilon, maxiter, include_hartree, mix=0.5, xtol=1e-4, rtol=1e-4, maxiterbrentq=50, n_target=1.0):
     # Auto-fix bracket if needed
     try:
-        mu1, mu2 = find_bracket(mu1, mu2, hk0, rho, K, T, (Vb, Vc), eps0,
+        mu1, mu2 = find_bracket(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
                                 epsilon_threshold, N_epsilon, maxiter, include_hartree, mix)
     except ValueError as e:
         print(f"Warning: {e}")

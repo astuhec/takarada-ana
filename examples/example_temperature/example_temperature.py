@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, json5
 os.environ['PATH'] = '/Library/TeX/texbin:' + os.environ['PATH']
 import numpy as np
 from scipy.special import roots_legendre
@@ -8,30 +8,40 @@ import matplotlib.pyplot as plt
 ## This example shows how to run 
 ####################################################################################################################
 
-''' Add path to programs and parameters '''
-computer = 'anast' # if on mac, else 'anast' if on lenovo
+#''' Add path to programs and parameters '''
+#computer = 'ana' # if on mac, else 'anast' if on lenovo
+
+print("Which computer are you on? (ana for Apple, anast for Lenovo)")
+
+while True:
+    user_input = input("Enter 'ana' or 'anast': ").strip().lower()
+    if user_input in ('ana', 'anast'):
+        computer = user_input
+        break
+    print("Invalid input. Please type 'ana' or 'anast'.")
 
 if computer == 'anast':
     DIR = '/Users/anast/OneDrive/Namizje/takarada-ana/'
-elif computer == 'ana':
+else:  # ana
     DIR = '/Users/ana/Desktop/takarada-ana/'
 
-print('Running on computer: ' + DIR)
+print(f"Selected computer: {computer}")
+print(f"Directory: {DIR}")
+
 sys.path.insert(0, DIR + 'main-programs/')
 import takarada_module as module
 import takarada_helpers as helpers
 
-input_file = DIR + 'examples/example_temperature/input.json'
-input_temperature = DIR + 'examples/example_temperature/input_temperature.json'
+input_file = DIR + 'examples/example_temperature/input.json5'
 ####################################################################################################################
 
+## (1) Initialize model
 s = module.model(input_file)
-mu0 = 0.5 * (np.min(s.energije[1]) + np.max(s.energije[0]))
-s.run_Tdependence(input_temperature)
 
-Nbeta_intial = 200
-scale_initial = 1/1.005
-s.correction(input_temperature, Nbeta_intial, scale_initial, safety=np.argmin(np.abs(s.mus - mu0)))
+## (2) Get T dependence of order parameters, chemical potential, and transport coefficients
+s.run_Tdependence()
+
+s.correction()
 
 Ts = s.merge(s.Ts)
 mus = s.merge(s.mus)
@@ -39,7 +49,6 @@ mus = s.merge(s.mus)
 plt.figure(figsize=(10, 6))
 plt.plot(s.Ts,s.mus, '.-', linewidth=1, markersize=4, alpha=0.6, label='Raw μ(T)')
 plt.plot(Ts, mus, color='black')
-plt.axhline(mu0, color='r', linestyle='--', alpha=0.7, label=f'μ_GS={mu0:.4f}')
 plt.xlabel('Temperature (eV)', fontsize=12)
 plt.ylabel('Chemical Potential (eV)', fontsize=12)
 plt.grid(True, alpha=0.3)

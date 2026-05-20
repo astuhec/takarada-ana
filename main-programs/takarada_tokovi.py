@@ -634,7 +634,8 @@ def simulate_pulz(K, hk0, rho, Vb, Vc, include_hartree,
     for i in range(N_points):
 
         if verbose and i % freq_verbose == 0:
-            print(f'Progress: {i/N_points}', flush=True)
+            msg = f'Progress: {i/N_points}'
+            print('\r' + msg + ' ' * (80 - len(msg)), end='', flush=True)
 
         A_t = A_pulz(i * dt, A0, t0, sigma, Omega)
         A_half = A_pulz(i * dt + dt/2, A0, t0, sigma, Omega)
@@ -1088,28 +1089,25 @@ def compute_chi(
             for om_idx, om in enumerate(omegas)
         }
 
-        with tqdm(total=N_om, desc="omegas", disable=not verbose) as pbar:
-            for future in as_completed(futures):
-                om_idx, result = future.result()
-                om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jEj0, dchi_jEj, chi_matj0, dchi_matj, chi_rhoj0 = result
+        #with tqdm(total=N_om, desc="omegas", disable=not verbose) as pbar:
+        for future in as_completed(futures):
+            om_idx, result = future.result()
+            om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jEj0, dchi_jEj, chi_matj0, dchi_matj, chi_rhoj0 = result
 
-                chi0_arr[om_idx]      = chi0
-                chi_rpa_arr[om_idx]   = chi_rpa
-                chi_jj0_arr[om_idx]   = chi_jj0
-                dchi_jj_arr[om_idx]   = dchi_jj
-                chi_jEj0_arr[om_idx] = chi_jEj0
-                dchi_jEj_arr[om_idx] = dchi_jEj
-                chi_matj0_arr[om_idx] = chi_matj0
-                dchi_matj_arr[om_idx] = dchi_matj
-                chi_rhoj0_arr[om_idx] = chi_rhoj0
+            chi0_arr[om_idx]      = chi0
+            chi_rpa_arr[om_idx]   = chi_rpa
+            chi_jj0_arr[om_idx]   = chi_jj0
+            dchi_jj_arr[om_idx]   = dchi_jj
+            chi_jEj0_arr[om_idx] = chi_jEj0
+            dchi_jEj_arr[om_idx] = dchi_jEj
+            chi_matj0_arr[om_idx] = chi_matj0
+            dchi_matj_arr[om_idx] = dchi_matj
+            chi_rhoj0_arr[om_idx] = chi_rhoj0
 
-                if verbose:
-                    print(
-                        f"  [om {om_idx+1}/{N_om}]",
-                        flush=True
-                    )
-                pbar.update(1)
-
+            if verbose:
+                msg = f'Progress: {(om_idx+1)/N_om}'
+                print('\r' + msg + ' ' * (80 - len(msg)), end='', flush=True)
+                
     if verbose:
         print(f"\nTotal time: {time.time() - t_total:.2f}s")
 
