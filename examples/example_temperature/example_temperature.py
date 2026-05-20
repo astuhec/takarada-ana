@@ -1,4 +1,4 @@
-import os, sys, json5
+import os, sys
 os.environ['PATH'] = '/Library/TeX/texbin:' + os.environ['PATH']
 import numpy as np
 from scipy.special import roots_legendre
@@ -37,8 +37,8 @@ s = module.model(input_file)
 ## (2) Get T dependence of order parameters, chemical potential, and transport coefficients
 s.run_Tdependence()
 
-
-s.correction()
+## (3) Get low-T dependence of order parameters, chemical potential, and transport coefficients
+s.run_lowTdependence()
 
 Ts = s.merge(s.Ts)
 mus = s.merge(s.mus)
