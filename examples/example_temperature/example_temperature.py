@@ -8,9 +8,6 @@ import matplotlib.pyplot as plt
 ## This example shows how to run 
 ####################################################################################################################
 
-#''' Add path to programs and parameters '''
-#computer = 'ana' # if on mac, else 'anast' if on lenovo
-
 print("Which computer are you on? (ana for Apple, anast for Lenovo)")
 
 while True:
@@ -30,7 +27,6 @@ print(f"Directory: {DIR}")
 
 sys.path.insert(0, DIR + 'main-programs/')
 import takarada_module as module
-import takarada_helpers as helpers
 
 input_file = DIR + 'examples/example_temperature/input.json5'
 ####################################################################################################################
@@ -40,6 +36,7 @@ s = module.model(input_file)
 
 ## (2) Get T dependence of order parameters, chemical potential, and transport coefficients
 s.run_Tdependence()
+
 
 s.correction()
 

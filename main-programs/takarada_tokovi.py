@@ -385,10 +385,11 @@ def fd_1(eps_or_omega, T, mu=0.0):
     return - exp_x / (T * (1 + exp_x)**2)
 
 ''' Boltzmann transport function'''
-def phi_Boltzmann(K, energije, mu, omegas, faktor=0.2, shape='Gaussian'):
+def phi_Boltzmann(K, energije, mu, epsilons, faktor=0.2, shape='Gaussian'):
     Nk = len(K)
     dK = K[1] - K[0]
-    phi = np.zeros(len(omegas))
+    depsilon = epsilons[1] - epsilons[0]
+    phi = np.zeros(len(epsilons))
     vel1 = np.diff(energije[0]) / dK
     vel2 = np.diff(energije[1]) / dK
 
@@ -397,13 +398,13 @@ def phi_Boltzmann(K, energije, mu, omegas, faktor=0.2, shape='Gaussian'):
     vel[1] = np.hstack([[0], vel2])
 
     v_max = np.max(np.abs(vel))
-    sigma = np.sqrt(v_max * (omegas[1] - omegas[0]) * dK) * faktor
+    sigma = np.sqrt(v_max * depsilon * dK) * faktor
 
-    for i, omega in enumerate(omegas):
+    for i, epsilon in enumerate(epsilons):
         for j in range(0,Nk//2+1):
             multiply = 1 if j in [0,Nk//2] else 2
             for alpha in [0,1]:
-                phi[i] += multiply * delta_approximation(omega - energije[alpha,j] + mu, sigma, shape) * vel[alpha,j]**2
+                phi[i] += multiply * delta_approximation(epsilon - energije[alpha,j] + mu, sigma, shape) * vel[alpha,j]**2
     return phi / Nk
 
 def kahan_sum(vals):

@@ -10,9 +10,6 @@ import matplotlib.pyplot as plt
 ## (2) performing a tdHF simulation.
 ####################################################################################################################
 
-#''' Add path to programs and parameters '''
-#computer = 'ana' # if on mac, else 'anast' if on lenovo
-
 print("Which computer are you on? (ana for Apple, anast for Lenovo)")
 
 while True:
@@ -74,14 +71,14 @@ perturbation = results_dynamic['pulz'].real      # same for dynamic, frozen
 norm_dynamic = results_dynamic['norma'].real
 norm_frozen = results_frozen['norma'].real
 
-fig, ax = plt.subplots(ncols=3, nrows=2, figsize=(12,10))
-# order parameters delta_0 as a function of time
-ax[0,0].plot(t, results_frozen['delta_bs'].real, label=lab1, color=c1)
+fig, ax = plt.subplots(ncols=3, nrows=3, figsize=(15,15))
+# order parameters delta_0 as a function of time (SHIFTED for clarity)
 ax[0,0].plot(t, results_dynamic['delta_bs'].real, label=lab2, color=c2)
+ax[0,0].plot(t, np.max(results_dynamic['delta_bs'].real) + results_frozen['delta_bs'].real, label=lab1, color=c1)
 ax[0,0].set_ylabel(r'$\text{Re}\Delta_0(t)$', fontsize=15)
-# order parameters delta_1 as a function of time
-ax[0,1].plot(t, results_frozen['delta_cs'], label=lab1, color=c1)
+# order parameters delta_1 as a function of time (SHIFTED for clarity)
 ax[0,1].plot(t, results_dynamic['delta_cs'], label=lab2, color=c2)
+ax[0,1].plot(t, np.max(results_dynamic['delta_cs']) + results_frozen['delta_cs'], label=lab1, color=c1)
 ax[0,1].set_ylabel(r'$\text{Re}\Delta_1(t)$', fontsize=15)
 
 # normalization of density matrix
@@ -94,12 +91,12 @@ for n in range(3):
     ax[0,n].set_xlabel(r'time', fontsize=15)
     ax[0,n].legend(frameon=False, fontsize=13)
 
-# current
+# current (SHIFTED for clarity)
 current_frozen = results_frozen['measurement'].real[0]
 current_dynamic = results_dynamic['measurement'].real[0]
 
-ax[1,0].plot(t, current_frozen, label=lab1, color=c1)
 ax[1,0].plot(t, current_dynamic, label=lab2, color=c2)
+ax[1,0].plot(t, np.max(current_dynamic) + current_frozen, label=lab1, color=c1)
 ax[1,0].set_xlabel(r'time', fontsize=15)
 ax[1,0].set_ylabel(r'$<j(t)>$', fontsize=15)
 
@@ -107,25 +104,34 @@ ax[1,0].set_ylabel(r'$<j(t)>$', fontsize=15)
 omegas = results_frozen['omegas']       # same for dynamic, frozen
 
 omega_cut = max(omegas0)                # maximum frequency
-eta = 1/ t[-1]                          # damping factor in Fourier transform
+eta = 1/ t[-1] * 2                      # damping factor in Fourier transform
 
 omegas, Re_sigma_frozen = tokovi.optical_conductivity(t, current_frozen, perturbation, eta, omega_cut, s.Nk)
 omegas, Re_sigma_dynamic = tokovi.optical_conductivity(t, current_dynamic, perturbation, eta, omega_cut, s.Nk)
 
-ax[1,1].plot(omegas, Re_sigma_frozen, label=lab1, color=c1)
-ax[1,1].plot(omegas, Re_sigma_dynamic, label=lab2, color=c2)
+for j in [1,2]:
+    ax[j,1].plot(omegas, Re_sigma_frozen, label=lab1, color=c1)
+    ax[j,1].plot(omegas, Re_sigma_dynamic, label=lab2, color=c2)
 
-ax[1,2].plot(omegas0, sigma0, label=lab1_rpa, color=c1)
-ax[1,2].plot(omegas0, sigma0 + dsigma, label=lab2_rpa, color=c2)
+    ax[j,2].plot(omegas0, sigma0, label=lab1_rpa, color=c1)
+    ax[j,2].plot(omegas0, sigma0 + dsigma, label=lab2_rpa, color=c2)
 
-for j in range(1,3):
-    ax[1,j].set_xlabel(r'$\omega$', fontsize=15)
-    ax[1,j].set_ylabel(r'$\sigma$', fontsize=15)
+for j in [1,2]:
+    for n in [1,2]:
+        ax[n,j].set_xlabel(r'$\omega$', fontsize=15)
+        ax[n,j].set_ylabel(r'$\sigma$', fontsize=15)
 
 for j in range(3):
-    ax[1,j].legend(frameon=False, fontsize=13)
+    for n in [1,2]:
+        if (j,n) != (2,0): ax[n,j].legend(frameon=False, fontsize=13)
 
-ax[1,2].set_title(r'Comparison with RPA results', fontsize=13)
+ax[1,2].set_title(r'RPA results (for comparison)', fontsize=13)
 fig.suptitle(r'tdHF imulation results', fontsize=15)
+
+ax[2,0].axis('off')
+ax[2,1].set_ylim(0,1.0)
+ax[2,2].set_ylim(0,1.0)
+
+
 plt.tight_layout()
 plt.show()

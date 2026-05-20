@@ -266,9 +266,9 @@ class model:
                 msg = f'Progress {i/len(betas)}. beta={np.round(1/self.T, 3)}, n={np.round(self.n)}, delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}'
                 print('\r' + msg + ' ' * (80 - len(msg)), end='', flush=True)
     
-    def correction(self, input_phonon=None,
+    def run_lowT_dependence(self, input_phonon=None,
                         threshold=0.02, window=5, safety=10, window0=20, r2_threshold=0.99):
-        # find interval where mu(T) makes sense
+        # find interval where mu(T) makes sense (linear)
 
         Nbeta_correction = self.config.get("Nbeta_correction")
         scale_correction = 1/self.config.get("scale")
@@ -314,11 +314,23 @@ class model:
         self.mat_tilde = tokovi.operator_tilde(mat, self.vecs)
         self.rhos_tilde = tokovi.operator_tilde(self.rhos, self.vecs)
 
-    def ls_kubo(self, epsilons, Gamma, mfd1):
+    def transport_functions(self, epsilons, Gamma, dict_form=None):
         spektralka = tokovi.Spektralka(epsilons, self.mu, self.energije, Gamma)
         phi = tokovi.phi_Kubo(self.K, self.current_tilde, self.current_tilde, spektralka, epsilons)
         phiQ = tokovi.phi_Kubo(self.K, self.mat_tilde, self.current_tilde, spektralka, epsilons)
         phiQ2 = tokovi.phi_Kubo(self.K, self.mat_tilde, self.mat_tilde, spektralka, epsilons)
+        if dict_form == None:
+            return phi, phiQ, phiQ2
+        elif dict_form == True:
+            phi_boltz = tokovi.phi_Boltzmann(self.K, self.energije, self.mu, epsilons)
+            results = {'phi' : phi,
+                       'phiQ' : phiQ,
+                       'epsilons' : epsilons,
+                       'phi_Boltz' : phi_boltz}
+            return results
+
+    def ls_Kubo(self, epsilons, Gamma, mfd1):
+        phi, phiQ, phiQ2 = self.transport_functions(epsilons, Gamma)
 
         l11 = np.pi * tokovi.integral_omega(phi * mfd1, epsilons)
         l12 = np.pi * tokovi.integral_omega(epsilons * phi * mfd1, epsilons)
@@ -348,7 +360,7 @@ class model:
         l12_boltz = np.zeros(Ngamma)
 
         for g, Gamma in enumerate(Gammas):
-            l11_, l12_, l22_, l12q_, l22q_ = self.ls_kubo(epsilons, Gamma, mfd1)
+            l11_, l12_, l22_, l12q_, l22q_ = self.ls_Kubo(epsilons, Gamma, mfd1)
             l11[g] = l11_.real
             l22[g] = l22_.real
             l12[g] = l12_.real
@@ -428,7 +440,7 @@ class model:
         self.L12q_corr.append(helpers.to_scalar_if_single(l12q))
 
     def optical_response(self):
-        print('-' * 80 + '\n' + \
+        print('\n' + '-' * 80 + '\n' + \
               'Started calculation of RPA responses.', flush=True)
         params = self.config.get("params_RPA")
         deg = params["deg"]
@@ -457,7 +469,7 @@ class model:
         return results
 
     def simulate_perturbation(self, do_freeze=None):
-        print('-' * 80 + '\n' + \
+        print('\n' + '-' * 80 + '\n' + \
               'Started simulation of perturbation.', flush=True)
         params = self.config.get("params_perturbation")
         A0 = params['A0']
