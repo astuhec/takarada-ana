@@ -266,22 +266,22 @@ class model:
             msg = f'Progress {i/len(betas)}. beta={np.round(1/self.T, 3)}, n={np.round(self.n)}, delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}'
             print('\r' + msg + ' ' * (80 - len(msg)), end='', flush=True)
     
-    def run_lowT_dependence(self, input_phonon=None,
+    def run_lowT_dependence(self, input_phonon=None, T_start=None, T_end=None, T_stable=None,
                         threshold=0.02, window=5, safety=10, window0=20, r2_threshold=0.99):
         # find interval where mu(T) makes sense (linear)
 
         Nbeta_correction = self.config.get("Nbeta_correction")
         scale_correction = 1/self.config.get("scale")
-        stable_index = helpers.is_stable(self.Ts, self.mus, threshold, window) + safety
+        stable_index = np.argmin(np.abs(np.array(self.Ts) - T_stable))  if T_stable is not None else helpers.is_stable(self.Ts, self.mus, threshold, window) + safety
 
         # find interval above T_stable where mu(T) is linear. this will serve as approximation for mu(T) at T < T_stable
-        T_start, T_end = None, None
+
         while T_start==None or T_end==None:
             T_start, T_end = helpers.find_linear_region(self.Ts, self.mus, stable_index, window0, r2_threshold=r2_threshold)
             window0 -= 5
-        ind_start = np.argmin(np.abs(self.Ts - T_start))
-        ind_end = np.argmin(np.abs(self.Ts - T_end))
-        k, n = np.polyfit(self.Ts[ind_start:ind_end], self.mus[ind_start:ind_end], 1)
+        ind_start = np.argmin(np.abs(np.array(self.Ts) - T_start))
+        ind_end = np.argmin(np.abs(np.array(self.Ts) - T_end))
+        k, n = np.polyfit(np.array(self.Ts)[ind_start:ind_end], np.array(self.mus)[ind_start:ind_end], 1)
 
         self.coefficients = (k,n)
         n = self.mu_GS
