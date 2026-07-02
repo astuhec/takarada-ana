@@ -265,6 +265,7 @@ class model:
             #if i % 10 == 0:
             msg = f'Progress {i/len(betas)}. beta={np.round(1/self.T, 3)}, n={np.round(self.n)}, delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}'
             print(msg + ' ' * (80 - len(msg)), end='', flush=True)
+            print('\n', flush=True)
     
     def run_lowT_dependence(self, input_phonon=None, T_start=None, T_end=None, T_stable=None,
                         threshold=0.02, window=5, safety=10, window0=20, r2_threshold=0.99):
