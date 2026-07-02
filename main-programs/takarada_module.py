@@ -550,11 +550,6 @@ class model:
             data["L12_boltz"] = self.merge(self.L12_boltz)
             data["L22_boltz"] = self.merge(self.L22_boltz)
 
-            data['L11_fock'] = self.merge(self.L11_fock)
-            data['L12_fock'] = self.merge(self.L12_fock)
-            data['L12q_fock'] = self.merge(self.L12q_fock)
-            data['L11_fockfock'] = self.merge(self.L11_fockfock)
-            data['L12_fockfock'] = self.merge(self.L12_fockfock)
         if evaluate_vertex_DC:
             data["L11_0"] = self.merge(self.L11_0)
             data["L11_corr"] = self.merge(self.L11_corr)
