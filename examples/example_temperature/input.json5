@@ -2,10 +2,10 @@
     /* physical properties of the model */ 
     "Nk" : 1000,
     "phys_parameters" : {
-        "b" : 0.0,
+        "b" : 0.5,
         "t" : 1.0,
         "t_" : 3.0,
-        "t12" : 0.1,
+        "t12" : 0.0,
         "epsilon" : 2.0,
         "epsilon_" : 2.0,
         "Vb" : 2.0,
@@ -31,17 +31,17 @@
         },
 
     /* input for self-consistent determination of rho(T), mu(T) */ 
-    "beta0": 200,               // starting beta
+    "beta0": 300,               // starting beta
     "scale": 1.01,             // beta_{i+1} = beta_{i} / scale
-    "Nbetas": 300,              // last beta is beta0 / scale**Nbetas
-    "freq_betas": 1,            // calculate transport every freq_betas
+    "Nbetas": 500,              // last beta is beta0 / scale**Nbetas
+    "freq_betas": 5,            // calculate transport every freq_betas
     "maxbrentq" : 50,           // parameter for finding mu(T)
     "eps_ns0" : 1e-6,
-    "Nbeta_correction" : 200,         
+    "Nbeta_correction" : 500,         
 
     /* input for transport */ 
     "evaluate_transport_DC": 1,
-    "evaluate_vertex_DC": 0,
+    "evaluate_vertex_DC": 1,
     "Gammas": [0.008],          // spectral function width
     "params": {                 // input for evaluate_vertex_DC
         "Nomega": 1000,

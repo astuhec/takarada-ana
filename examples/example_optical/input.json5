@@ -2,14 +2,14 @@
     /* physical properties of the model */ 
     "Nk" : 2000,
     "phys_parameters" : {
-        "b" : 0.0,
+        "b" : 0.25,
         "t" : 1.0,
         "t_" : 3.0,
         "t12" : 0.1,
         "epsilon" : 2.0,
         "epsilon_" : 2.0,
-        "Vb" : 2.0,
-        "Vc" : 2.0,
+        "Vb" : 1.0,
+        "Vc" : 3.0,
         "delta" : 0.0
     },
     "include_hartree" : 1,
