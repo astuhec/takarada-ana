@@ -2,14 +2,14 @@
     /* physical properties of the model */ 
     "Nk" : 1000,
     "phys_parameters" : {
-        "b" : 0.0,
+        "b" : 0.5,
         "t" : 1.0,
         "t_" : 3.0,
         "t12" : 0.1,
         "epsilon" : 2.0,
         "epsilon_" : 2.0,
-        "Vb" : 2.0,
-        "Vc" : 2.0,
+        "Vb" : 3.0,
+        "Vc" : 1.0,
         "delta" : 0.0
     },
     "include_hartree" : 1,
@@ -17,27 +17,26 @@
     "n_target" : 1.0,
 
     "parameters" : {
-        "n_pass" : 1e-6,
-        "epsilon_threshold" : 1e-8,
+        "n_pass" : 1e-4,
+        "epsilon_threshold" : 1e-6,
         "N_epsilon" : 5,
         "maxiter" : 5000,
-        "eps_last" : 1e-8,
-        "dmu" : 0.05,
-        "mix2" : 0.005,
+        "eps_last" : 1e-6,
+        "dmu" : 1.5,
+        "mix2" : 0.001,
         "mix3" : 1.5,
         "faktor1" : 0.1,
-        "max_trials" : 20,
-        "eps0" : 0.05
+        "max_trials" : 15,
+        "eps0" : 0.03
         },
 
     /* input for self-consistent determination of rho(T), mu(T) */ 
-    "beta0": 200,               // starting beta
-    "scale": 1.01,             // beta_{i+1} = beta_{i} / scale
-    "Nbetas": 300,              // last beta is beta0 / scale**Nbetas
+    "beta0": 50,               // starting beta
+    "scale": 1.008,             // beta_{i+1} = beta_{i} / scale
+    "Nbetas": 5,              // last beta is beta0 / scale**Nbetas
     "freq_betas": 1,            // calculate transport every freq_betas
     "maxbrentq" : 50,           // parameter for finding mu(T)
-    "eps_ns0" : 1e-6,
-    "Nbeta_correction" : 200,         
+    "eps_ns0" : 1e-6,           
 
     /* input for transport */ 
     "evaluate_transport_DC": 1,
@@ -63,10 +62,10 @@
         "sigma" : 0.05,
         "Omega0" : 0.0,
         "dt" : 0.01,
-        "t_max" : 200,
+        "t_max" : 400,
         "Ncorr" : 10,
         "tol" : 1e-5,
-        "Gamma_" : 0.0, 
+        "Gamma_" : 0.008, 
         "perturbation_operator" : "current",
         "measure_provider" : "current",
         "verbose" : 1,
@@ -77,7 +76,7 @@
 
     /* input for optical conductivity via RPA */
     "params_RPA": {
-        "omega_low": 0.01,
+        "omega_low": 0.05,
         "omega_high": 3.0,
         "omega_len": 200,
         "space" : "lin", // lin if linspace, log if logspace 

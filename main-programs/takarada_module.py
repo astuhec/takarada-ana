@@ -262,9 +262,9 @@ class model:
                     self.err = err_save
                     self.n = n_save
 
-            if i % 10 == 0:
-                msg = f'Progress {i/len(betas)}. beta={np.round(1/self.T, 3)}, n={np.round(self.n)}, delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}'
-                print('\r' + msg + ' ' * (80 - len(msg)), end='', flush=True)
+            #if i % 10 == 0:
+            msg = f'Progress {i/len(betas)}. beta={np.round(1/self.T, 3)}, n={np.round(self.n)}, delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}'
+            print('\r' + msg + ' ' * (80 - len(msg)), end='', flush=True)
     
     def run_lowT_dependence(self, input_phonon=None,
                         threshold=0.02, window=5, safety=10, window0=20, r2_threshold=0.99):
@@ -402,16 +402,16 @@ class model:
             invt = Gamma / self.T
             
             if not phonon:
-                results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=False, eps=eps, n_workers=n_workers)
+                results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers)
             else:
-                results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=False, eps=eps, n_workers=n_workers,
+                results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers,
                                          gbx=gbx, omega_bx=omega_bx,
                                          gby=gby, omega_by=omega_by,
                                          gcx=gcx, omega_cx=omega_cx,
                                          gcy=gcy, omega_cy=omega_cy,
                                          Gamma_ph=Gamma_ph, phonon=True, include_hartree=self.include_hartree, Vb=self.Vb, Vc=self.Vc)
 
-            np.savez(f'results{len(self.Ts)}.npz', **results)
+            ##np.savez(f'results{len(self.Ts)}.npz', **results)
             
             Chi_jj0 = - results['chi_jj0'].imag
             dChi_jj  = - results['dchi_jj'].imag

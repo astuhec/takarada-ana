@@ -645,7 +645,7 @@ def simulate_pulz(K, hk0, rho, Vb, Vc, include_hartree,
         if do_freeze:
             H_k0 = H0
         else:
-            H_k0 = h_k(K, hk0, rho,Vb, Vc, 0., include_hartree)
+            H_k0 = h_k(K, hk0, rho, Vb, Vc, 0., include_hartree)
         # ------------------
         # Predictor
         # ------------------

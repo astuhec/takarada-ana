@@ -31,27 +31,10 @@ import takarada_module as module
 import takarada_tokovi as tokovi
 
 input_file = DIR + 'examples/example_optical/input.json5'
-print('hello')
+
 ####################################################################################################################
 ## (1) Initialize system, find ground state
 s = module.model(input_file)
-
-''' look at effective bands '''
-fig, ax = plt.subplots(figsize=(6,4))
-K = s.K
-E_bare_0 = s.hk0[0,0,:]
-E_bare_1 = s.hk0[1,1,:]
-E_dressed_minus = s.energije[0]
-E_dressed_plus = s.energije[1]
-ax.plot(K, E_bare_0, label='bare bands', color='black')
-ax.plot(K, E_bare_1, color='black')
-ax.plot(K, E_dressed_minus, label='effective bands', color='red')
-ax.plot(K, E_dressed_plus, color='red')
-ax.set_xlabel(r'$k$', fontsize=15)
-ax.set_ylabel(r'$\epsilon_k$', fontsize=15)
-fig.suptitle('Band structure')
-plt.tight_layout()
-plt.show()
 
 ## (2) Reach a finite temperature (RPA equations will need a finite beta=1/T)
 s.run_Tdependence()
@@ -90,7 +73,7 @@ perturbation = results_dynamic['pulz'].real         # same for dynamic, frozen
 norm_dynamic = results_dynamic['norma'].real
 norm_frozen = results_frozen['norma'].real
 
-fig, ax = plt.subplots(ncols=3, nrows=3, figsize=(15,15))
+'''fig, ax = plt.subplots(ncols=3, nrows=3, figsize=(15,20))
 
 # order parameters delta_0 (called delta_b in code) as a function of time (SHIFTED for clarity)
 ax[0,0].plot(t, results_dynamic['delta_bs'].real, label=lab2, color=c2)
@@ -144,6 +127,10 @@ for j in [1,2]:
         ax[n,j].set_xlabel(r'$\omega$', fontsize=15)
         ax[n,j].set_ylabel(r'$\sigma$', fontsize=15)
 
+
+ax[2,0].plot(omegas, Re_sigma_dynamic)
+ax[2,0].plot(omegas0, sigma0 + dsigma)
+
 for j in range(3):
     for n in [1,2]:
         if (j,n) != (2,0): ax[n,j].legend(frameon=False, fontsize=13)
@@ -151,14 +138,12 @@ for j in range(3):
 ax[1,2].set_title(r'RPA results (for comparison)', fontsize=13)
 fig.suptitle(r'tdHF imulation results', fontsize=15)
 
-ax[2,0].axis('off')
-
 ax[2,1].set_ylim(0,1.0)
 ax[2,2].set_ylim(0,1.0)
 
 plt.tight_layout()
-plt.show()
+plt.show()'''
 
 plt.plot(omegas, Re_sigma_dynamic)
-plt.plot(omegas0, sigma0 + dsigma)#sss
+plt.plot(omegas0, sigma0 + dsigma)
 plt.show()
