@@ -1,7 +1,6 @@
 import numpy as np
 import json5
 from scipy.special import roots_legendre
-import json
 
 import takarada_helpers as helpers
 import takarada_tokovi as tokovi
@@ -53,6 +52,14 @@ class model:
         self.Vc = self.phys_parameters["Vc"]
         self.delta = self.phys_parameters["delta"]
         self.phys_parameters = list(self.phys_parameters.values())
+        if verbose:
+            print('Physical parameters are:' + '\n' + \
+                f't0={self.t}' + '\n' + \
+                f't1={self.t_}' + '\n' + \
+                f'tperp={self.t12}' + '\n' + \
+                f'epsilon={self.epsilon}' + '\n' + \
+                f'V0={self.Vb}' + '\n' + \
+                f'V1={self.Vc}' + '\n' + '=' * 80, flush=True)
 
         self.hk0 = helpers.h_k0(self.K, self.phys_parameters)
 
@@ -62,12 +69,11 @@ class model:
         ''' Find ground state '''
         self.GS()
         if verbose:
-            print('-' * 80, flush=True)
             print(f'Found ground state.' + '\n' + 'Order parameter components are:' + '\n' + \
                 f'delta_0 = {np.round(self.delta_b.real, 5)}' + '\n' + \
                 f'delta_1 = {np.round(self.delta_c.real, 5)}' + '\n' + \
                 f'Chemical potential is {np.round(self.mu, 5)} eV' + '\n' + \
-                f'Occupation is {np.round(self.n, 5)}' + '\n' + '-' * 80, flush=True
+                f'Occupation is {np.round(self.n, 5)}' + '\n' + '=' * 80, flush=True
                 )
         self.current = tokovi.j_tok(self.K, self.phys_parameters)
         self.rhos, self.thetas = tokovi.rho_operators(self.K, self.phys_parameters, self.include_hartree)
@@ -262,14 +268,12 @@ class model:
                     self.err = err_save
                     self.n = n_save
 
-            #if i % 10 == 0:
-            msg = f'Progress {i/len(betas)}. beta={np.round(1/self.T, 3)}, n={np.round(self.n)}, delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}'
-            print(msg + ' ' * (80 - len(msg)), end='', flush=True)
-            print('\n', flush=True)
+            msg = f'Progress {np.round(i/len(betas), 3)}. beta={np.round(1/self.T, 1)}, n={np.round(self.n)}, delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}'
+            print(msg, flush=True)
     
     def run_lowT_dependence(self, input_phonon=None, T_start=None, T_end=None, T_stable=None,
                         threshold=0.02, window=5, safety=10, window0=20, r2_threshold=0.99):
-        # find interval where mu(T) makes sense (linear)
+        # find interval where mu(T) makes sense (linear) or provide region by putting T_start, T_end, T_stable
 
         Nbeta_correction = self.config.get("Nbeta_correction")
         scale_correction = 1/self.config.get("scale")
