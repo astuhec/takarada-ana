@@ -55,7 +55,7 @@ class model:
         #self.phys_parameters = list(self.phys_parameters.values())
         
         self.phys_parameters = [self.b, self.t, self.t_, self.t12, self.epsilon, self.epsilon_, self.Vb, self.Vc, self.delta]
-
+        self.phys_parameters = [float(u) for u in self.phys_parameters]
         
         if verbose:
             print('Physical parameters are:' + '\n' + \
