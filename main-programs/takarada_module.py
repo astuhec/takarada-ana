@@ -52,7 +52,11 @@ class model:
         self.Vb = self.phys_parameters["Vb"] if Vb==None else Vb
         self.Vc = self.phys_parameters["Vc"] if Vc==None else Vc
         self.delta = self.phys_parameters["delta"] if delta==None else delta
-        self.phys_parameters = list(self.phys_parameters.values())
+        #self.phys_parameters = list(self.phys_parameters.values())
+        
+        self.phys_parameters [self.b, self.t, self.t_, self.t12, self.epsilon, self.epsilon_, self.Vb, self.Vc, self.delta]
+
+        
         if verbose:
             print('Physical parameters are:' + '\n' + \
                 f't0={self.t}' + '\n' + \
