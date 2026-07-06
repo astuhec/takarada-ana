@@ -59,13 +59,14 @@ class model:
         
         if verbose:
             print('Physical parameters are:' + '\n' + \
+                f'b={self.b}' + '\n' + \
                 f't0={self.t}' + '\n' + \
                 f't1={self.t_}' + '\n' + \
                 f'tperp={self.t12}' + '\n' + \
                 f'epsilon={self.epsilon}' + '\n' + \
                 f'V0={self.Vb}' + '\n' + \
                 f'V1={self.Vc}' + '\n' + '=' * 80, flush=True)
-
+                
         self.hk0 = helpers.h_k0(self.K, self.phys_parameters)
 
         if compute_gap_infty:
