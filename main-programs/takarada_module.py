@@ -11,7 +11,8 @@ def load_config(path):
             
 ''' Takarada model '''
 class model:
-    def __init__(self, input_file, compute_gap_infty=True, verbose=True):
+    def __init__(self, input_file, compute_gap_infty=True, verbose=True,
+                 b=None, t=None, t_=None, t12=None, epsilon=None, epsilon_=None, Vb=None, Vc=None, delta=None):
         
         ''' read input parameter and initialize the system '''
     
@@ -42,15 +43,15 @@ class model:
         self.n_target = config.get("n_target")
         
         self.phys_parameters = config.get("phys_parameters")
-        self.b = self.phys_parameters["b"]
-        self.t = self.phys_parameters["t"]
-        self.t_ = self.phys_parameters["t_"]
-        self.t12 = self.phys_parameters["t12"]
-        self.epsilon = self.phys_parameters["epsilon"]
-        self.epsilon_ = self.phys_parameters["epsilon_"]
-        self.Vb = self.phys_parameters["Vb"]
-        self.Vc = self.phys_parameters["Vc"]
-        self.delta = self.phys_parameters["delta"]
+        self.b = self.phys_parameters["b"] if b==None else b
+        self.t = self.phys_parameters["t"] if t==None else t
+        self.t_ = self.phys_parameters["t_"] if t_==None else t_
+        self.t12 = self.phys_parameters["t12"] if t12==None else t12
+        self.epsilon = self.phys_parameters["epsilon"] if epsilon==None else epsilon
+        self.epsilon_ = self.phys_parameters["epsilon_"] if epsilon_==None else epsilon_
+        self.Vb = self.phys_parameters["Vb"] if Vb==None else Vb
+        self.Vc = self.phys_parameters["Vc"] if Vc==None else Vc
+        self.delta = self.phys_parameters["delta"] if delta==None else delta
         self.phys_parameters = list(self.phys_parameters.values())
         if verbose:
             print('Physical parameters are:' + '\n' + \
