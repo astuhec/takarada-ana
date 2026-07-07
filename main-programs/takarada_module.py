@@ -440,8 +440,16 @@ class model:
             Chi_matj0 = - results['chi_matj0'].imag
             dChi_matj = - results['dchi_matj'].imag
             Chi_matj = Chi_matj0 + dChi_matj
-            l12q_0[g] = tokovi.find_DC_limit(omega0, Chi_matj0)
-            l12q[g] = tokovi.find_DC_limit(omega0, Chi_matj)
+            
+            if np.max(np.abs(Chi_matj0)) < 1e-14:
+                l12q_0 = 0.0
+            else:
+                l12q_0 = tokovi.find_DC_limit(omega0, Chi_matj0)
+
+            if np.max(np.abs(Chi_matj)) < 1e-14:
+                l12q = 0.0
+            else:
+                l12q = tokovi.find_DC_limit(omega0, Chi_matj)
 
         self.L11_0.append(helpers.to_scalar_if_single(l11_0))
         self.L11_corr.append(helpers.to_scalar_if_single(l11))
