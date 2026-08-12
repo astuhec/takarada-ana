@@ -17,6 +17,24 @@ class model:
         ''' read input parameter and initialize the system '''
     
         config = load_config(input_file)
+
+        # Override values if explicitly provided
+        overrides = {
+            "b": b,
+            "t": t,
+            "t_": t_,
+            "t12": t12,
+            "epsilon": epsilon,
+            "epsilon_": epsilon_,
+            "Vb": Vb,
+            "Vc": Vc,
+            "delta": delta,
+        }
+
+        for key, value in overrides.items():
+            if value is not None:
+                config[key] = value
+
         self.config = config
 
         self.Nk = config.get("Nk")
@@ -43,15 +61,15 @@ class model:
         self.n_target = config.get("n_target")
         
         self.phys_parameters = config.get("phys_parameters")
-        self.b = self.phys_parameters["b"] if b==None else b
-        self.t = self.phys_parameters["t"] if t==None else t
-        self.t_ = self.phys_parameters["t_"] if t_==None else t_
-        self.t12 = self.phys_parameters["t12"] if t12==None else t12
-        self.epsilon = self.phys_parameters["epsilon"] if epsilon==None else epsilon
-        self.epsilon_ = self.phys_parameters["epsilon_"] if epsilon_==None else epsilon_
-        self.Vb = self.phys_parameters["Vb"] if Vb==None else Vb
-        self.Vc = self.phys_parameters["Vc"] if Vc==None else Vc
-        self.delta = self.phys_parameters["delta"] if delta==None else delta
+        self.b = self.phys_parameters["b"] #if b==None else b
+        self.t = self.phys_parameters["t"] #if t==None else t
+        self.t_ = self.phys_parameters["t_"] #if t_==None else t_
+        self.t12 = self.phys_parameters["t12"]# if t12==None else t12
+        self.epsilon = self.phys_parameters["epsilon"] #if epsilon==None else epsilon
+        self.epsilon_ = self.phys_parameters["epsilon_"] #if epsilon_==None else epsilon_
+        self.Vb = self.phys_parameters["Vb"] #if Vb==None else Vb
+        self.Vc = self.phys_parameters["Vc"] #if Vc==None else Vc
+        self.delta = self.phys_parameters["delta"] #if delta==None else delta
         #self.phys_parameters = list(self.phys_parameters.values())
         
         self.phys_parameters = [self.b, self.t, self.t_, self.t12, self.epsilon, self.epsilon_, self.Vb, self.Vc, self.delta]
