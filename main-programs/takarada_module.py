@@ -476,10 +476,19 @@ class model:
         self.L12q_0.append(helpers.to_scalar_if_single(l12q_0))
         self.L12q_corr.append(helpers.to_scalar_if_single(l12q))
 
-    def optical_response(self):
+    def optical_response(self, Gamma=None):
         print('\n' + '-' * 80 + '\n' + \
               'Started calculation of RPA responses.', flush=True)
         params = self.config.get("params_RPA")
+
+        overrides = {
+            "Gamma" : Gamma
+        }
+
+        for key, value in overrides.items():
+            if value is not None:
+                params[key] = value
+
         deg = params["deg"]
         Gamma = params["Gamma"]
         eps = params["eps"]
@@ -505,10 +514,19 @@ class model:
         print('\n' + 'Finished calculation of RPA responses.', flush=True)
         return results
 
-    def simulate_perturbation(self, do_freeze=None):
+    def simulate_perturbation(self, do_freeze=None, Gamma_=None):
         print('\n' + '-' * 80 + '\n' + \
               'Started simulation of perturbation.', flush=True)
         params = self.config.get("params_perturbation")
+
+        overrides = {
+            "Gamma_" : Gamma_
+        }
+
+        for key, value in overrides.items():
+            if value is not None:
+                params[key] = value
+
         A0 = params['A0']
         t0 = params['t0']
         sigma = params['sigma']
