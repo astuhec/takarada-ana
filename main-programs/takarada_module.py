@@ -1,3 +1,5 @@
+from logging import config
+
 import numpy as np
 import json5
 from scipy.special import roots_legendre
@@ -19,6 +21,7 @@ class model:
         config = load_config(input_file)
 
         # Override values if explicitly provided
+
         overrides = {
             "b": b,
             "t": t,
@@ -31,9 +34,13 @@ class model:
             "delta": delta,
         }
 
+        phys_parameters = config.get("phys_parameters")
+
         for key, value in overrides.items():
             if value is not None:
-                config[key] = value
+                phys_parameters[key] = value
+
+        self.phys_parameters = phys_parameters
 
         self.config = config
 
@@ -60,7 +67,6 @@ class model:
         self.include_hartree = config.get("include_hartree")
         self.n_target = config.get("n_target")
         
-        self.phys_parameters = config.get("phys_parameters")
         self.b = self.phys_parameters["b"] #if b==None else b
         self.t = self.phys_parameters["t"] #if t==None else t
         self.t_ = self.phys_parameters["t_"] #if t_==None else t_
@@ -88,7 +94,9 @@ class model:
         self.hk0 = helpers.h_k0(self.K, self.phys_parameters)
 
         if compute_gap_infty:
-            self.energy_infty, self.mu_infty, self.gap_infty = Gap_infty(input_file, self.parameters, self.include_hartree)
+            print(self.Vb, self.Vc, self.t12)
+            self.energy_infty, self.mu_infty, self.gap_infty = Gap_infty(input_file, self.parameters, self.include_hartree,
+                                                                         b=self.b, t=self.t, t_=self.t_, t12=self.t12, epsilon=self.epsilon, epsilon_=self.epsilon_, Vb=self.Vb, Vc=self.Vc, delta=self.delta)
         
         ''' Find ground state '''
         self.GS()
@@ -648,10 +656,11 @@ class model:
             
         return data
     
-def Gap_infty(input_file, parameters, include_hartree):
+def Gap_infty(input_file, parameters, include_hartree,
+              b=None, t=None, t_=None, t12=None, epsilon=None, epsilon_=None, Vb=None, Vc=None, delta=None):
     new_parameters1 = parameters.copy()
     new_parameters1["eps0"] = 0.
-    m = model(input_file, compute_gap_infty=False, verbose=False)
+    m = model(input_file, compute_gap_infty=False, verbose=False, b=b, t=t, t_=t_, t12=t12, epsilon=epsilon, epsilon_=epsilon_, Vb=Vb, Vc=Vc, delta=delta)
     m.GS()  # Compute ground state to populate m.rho
     hk = m.hk0.copy()
     if include_hartree == True:
