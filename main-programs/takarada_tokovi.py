@@ -11,9 +11,7 @@ from takarada_helpers import parameters, h_k, Delta, delta_approximation
 
 ''' current operator '''
 @njit(cache=True)
-def j_tok(K, phys_parameters):
-    b, t, t_, t12, _, _, Vb, Vc, delta = phys_parameters
-    pos, kinetic, _ = parameters(b, t, t_, t12, Vb, Vc, delta)
+def j_tok(K, pos, kinetic):
     Nk = len(K)
     j = np.zeros((2, 2, Nk), dtype=np.complex128)
     for line in kinetic:
@@ -24,10 +22,8 @@ def j_tok(K, phys_parameters):
     return j
 
 ''' below is stuff for mean-field approximation of the non-local interaction current operator '''
-def input_data(K, phys_parameters):
+def input_data(K, pos, kinetic, interaction):
     Nk = len(K)
-    b, t, t_, t12, _, _, Vb, Vc, delta = phys_parameters
-    pos, kinetic, interaction = parameters(b, t, t_, t12,  Vb, Vc, delta)
     geom = dict()
     geom["kinetic"] = kinetic
     geom["interaction"] = interaction
@@ -167,9 +163,7 @@ def compute_together_mf_matrices(K, rho, geom, phases, g_ffts):
 
 ''' functions mf_matrix1,2,3,4 give exactly the same as function compute_all_mf_matrices,
 but the latter is more convenient (faster if used for multiple calls) because it uses precomputed elements '''
-def mf_matrix1(K, rho, phys_parameters):
-    b, t, t_, t12, _, _, Vb, Vc, delta = phys_parameters
-    pos, kinetic, interaction = parameters(b, t, t_, t12, Vb, Vc, delta)
+def mf_matrix1(K, rho, pos, kinetic, interaction):
     Nk = len(K)
     matrix = np.zeros((2, 2, Nk), dtype=np.complex128)
 
@@ -195,9 +189,7 @@ def mf_matrix1(K, rho, phys_parameters):
                             matrix[orb1, orb2] += 1j * t * V_ * lega * np.exp(-1j * K * x) / Nk * suma_n
     return matrix
 
-def mf_matrix2(K, rho, phys_parameters):
-    b, t, t_, t12, _, _, Vb, Vc, delta = phys_parameters
-    pos, kinetic, interaction = parameters(b, t, t_, t12, Vb, Vc, delta)
+def mf_matrix2(K, rho, pos, kinetic, interaction):
     Nk = len(K)
     matrix = np.zeros((2, 2, Nk), dtype=np.complex128)
 
@@ -224,9 +216,7 @@ def mf_matrix2(K, rho, phys_parameters):
     return matrix
 
 
-def mf_matrix3(K, rho, phys_parameters):
-    b, t, t_, t12, _, _, Vb, Vc, delta = phys_parameters
-    pos, kinetic, interaction = parameters(b, t, t_, t12, Vb, Vc, delta)
+def mf_matrix3(K, rho, pos, kinetic, interaction):
     Nk = len(K)
     matrix = np.zeros((2, 2, Nk), dtype=np.complex128)
 
@@ -268,9 +258,7 @@ def mf_matrix3(K, rho, phys_parameters):
                             matrix[orb1_, orb2] += f_k * gh
     return -matrix
 
-def mf_matrix4(K, rho, phys_parameters):
-    b, t, t_, t12, _, _, Vb, Vc, delta = phys_parameters
-    pos, kinetic, interaction = parameters(b, t, t_, t12, Vb, Vc, delta)
+def mf_matrix4(K, rho, pos, kinetic, interaction):
     Nk = len(K)
     matrix = np.zeros((2, 2, Nk), dtype=np.complex128)
     for alpha in range(2):
@@ -794,9 +782,7 @@ sigmas[1] = np.array([[0,1],[1,0]])
 sigmas[2] = np.array([[0,-1j], [1j,0]])
 sigmas[3] = np.diag([1,-1])
 
-def rho_operators(K, phys_parameters, include_hartree):
-
-    _, _, _, _, _, _, Vb, Vc, _ = phys_parameters
+def rho_operators(K, Vb, Vc, include_hartree):
 
     if include_hartree == True:
         thetas = np.array([Vb/2, -Vb/2, -Vb/2, -Vb/2,

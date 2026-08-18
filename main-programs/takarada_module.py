@@ -67,19 +67,20 @@ class model:
         self.include_hartree = config.get("include_hartree")
         self.n_target = config.get("n_target")
         
-        self.b = self.phys_parameters["b"] #if b==None else b
-        self.t = self.phys_parameters["t"] #if t==None else t
-        self.t_ = self.phys_parameters["t_"] #if t_==None else t_
-        self.t12 = self.phys_parameters["t12"]# if t12==None else t12
-        self.epsilon = self.phys_parameters["epsilon"] #if epsilon==None else epsilon
-        self.epsilon_ = self.phys_parameters["epsilon_"] #if epsilon_==None else epsilon_
-        self.Vb = self.phys_parameters["Vb"] #if Vb==None else Vb
-        self.Vc = self.phys_parameters["Vc"] #if Vc==None else Vc
-        self.delta = self.phys_parameters["delta"] #if delta==None else delta
-        #self.phys_parameters = list(self.phys_parameters.values())
+        self.b = self.phys_parameters["b"]
+        self.t = self.phys_parameters["t"]
+        self.t_ = self.phys_parameters["t_"]
+        self.t12 = self.phys_parameters["t12"]
+        self.epsilon = self.phys_parameters["epsilon"]
+        self.epsilon_ = self.phys_parameters["epsilon_"]
+        self.Vb = self.phys_parameters["Vb"]
+        self.Vc = self.phys_parameters["Vc"]
+        self.delta = self.phys_parameters["delta"]
         
         self.phys_parameters = [self.b, self.t, self.t_, self.t12, self.epsilon, self.epsilon_, self.Vb, self.Vc, self.delta]
         self.phys_parameters = [float(u) for u in self.phys_parameters]
+
+        self.pos, self.kinetic, self.interaction = helpers.parameters(self.b, self.t, self.t_, self.t12, self.Vb, self.Vc, self.delta)
         
         if verbose:
             print('Physical parameters are:' + '\n' + \
@@ -107,9 +108,9 @@ class model:
                 f'Chemical potential is {np.round(self.mu, 5)} eV' + '\n' + \
                 f'Occupation is {np.round(self.n, 5)}' + '\n' + '=' * 80, flush=True
                 )
-        self.current = tokovi.j_tok(self.K, self.phys_parameters)
-        self.rhos, self.thetas = tokovi.rho_operators(self.K, self.phys_parameters, self.include_hartree)
-        self.geom, self.phases = tokovi.input_data(self.K, self.phys_parameters)
+        self.current = tokovi.j_tok(self.K, self.pos, self.kinetic)
+        self.rhos, self.thetas = tokovi.rho_operators(self.K, self.Vb, self.Vc, self.include_hartree)
+        self.geom, self.phases = tokovi.input_data(self.K, self.pos, self.kinetic, self.interaction)
         self.g_ffts = tokovi.G_ffts(self.phases, self.Nk)
 
         self.delta_bs = []
