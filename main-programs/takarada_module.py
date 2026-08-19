@@ -447,7 +447,8 @@ class model:
         self.L12q_0.append(helpers.to_scalar_if_single(l12q_0))
         self.L12q_corr.append(helpers.to_scalar_if_single(l12q))
 
-    def optical_response(self, Gamma=None):
+    def optical_response(self, Gamma=None,
+                         include_phonon=False, lam_b=None, om_b=None, lam_c=None, om_c=None, Gamma_ph=None):
         print('\n' + '-' * 80 + '\n' + \
               'Started calculation of RPA responses.', flush=True)
         params = self.config.get("params_RPA")
@@ -477,7 +478,13 @@ class model:
         nodes, weights = roots_legendre(deg)
         mu_ = self.mu / Gamma
         invt = Gamma / self.T
-        results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps)
+        if not include_phonon:
+            results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps)
+        elif include_phonon:
+            results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps,
+                                             include_hartree=self.include_hartree, include_phonon=include_phonon,
+                                             lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=self.Vb, Vc=self.Vc, Gamma_ph=Gamma_ph)
+
         results["Gamma"] = Gamma
         results["T"] = self.T
         results["mu"] = self.mu

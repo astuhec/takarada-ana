@@ -784,7 +784,7 @@ sigmas[3] = np.diag([1,-1])
 
 def rho_operators(K, Vb, Vc, include_hartree):
 
-    if include_hartree == True:
+    if include_hartree:
         thetas = np.array([Vb/2, -Vb/2, -Vb/2, -Vb/2,
                             Vc/2, -Vc/2, -Vc/2, -Vc/2])
         if Vc == 0:
@@ -975,15 +975,20 @@ def compute_single_om_fused(
     thetas, tok_tilde, mat_tilde,
     energije,
     rhos_tilde,
-    gbx=None, omega_bx=None,
-    gby=None, omega_by=None,
-    gcx=None, omega_cx=None,
-    gcy=None, omega_cy=None,
-    eps=1e-5, include_hartree=True, Vb=None, Vc=None, Gamma_ph=None
+    eps=1e-5,
+    include_hartree=True,
+    include_phonon=False,
+    lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None
 ):
     Nop = len(thetas)
-    
-    thetas_diag = np.diag(thetas)
+
+    if not include_phonon:
+        thetas_om = thetas
+    elif include_phonon:
+        thetas_om = thetas_ph(Vb, Vc, include_hartree, lam_b, om_b, lam_c, om_c, om, Gamma_ph)
+
+    thetas_diag = np.diag(thetas_om)
+
     I = np.eye(Nop)
 
     # ── ONE precomputation pass for this omega ──────────────────────────
@@ -1030,14 +1035,42 @@ def compute_chi(
     energije,
     rhos_tilde,
     verbose=True,
-    gbx=None, omega_bx=None,
-    gby=None, omega_by=None,
-    gcx=None, omega_cx=None,
-    gcy=None, omega_cy=None,
-    include_hartree=True,
     n_workers=None, #None: number of CPU cores, or specify an integer
-    eps=1e-5, Vb=None, Vc=None, Gamma_ph=None
+    eps=1e-5,
+    include_hartree=True,
+    include_phonon=False,
+    lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None
 ):
+    if include_phonon:
+        missing = []
+        if lam_b is None:
+            missing.append("lam_b")
+        if om_b is None:
+            missing.append("om_b")
+        if Gamma_ph is None:
+            missing.append("Gamma_ph")
+        if Vc is None:
+            missing.append("Vc")
+        if include_hartree and Vb is None:
+            missing.append("Vb")
+        if Vc not in (None, 0):
+            if lam_c is None:
+                missing.append("lam_c")
+            if om_c is None:
+                missing.append("om_c")
+
+        if missing:
+            raise ValueError(
+                "include_phonon=True requires the following parameters: "
+                + ", ".join(missing)
+            )
+        if om_b == 0:
+            raise ValueError("om_b must be nonzero when include_phonon=True")
+        if Vc != 0 and om_c == 0:
+            raise ValueError(
+                "om_c must be nonzero when include_phonon=True and Vc != 0"
+            )
+
     omegas = np.asarray(omegas)
     N_om   = len(omegas)
     Nop    = len(thetas)
@@ -1059,11 +1092,11 @@ def compute_chi(
             Nk, Gamma, mu_, invt, nodes, weights,
             thetas, tok_tilde, mat_tilde,
             energije, rhos_tilde,
-            gbx=gbx, omega_bx=omega_bx, gby=gby, omega_by=omega_by, gcx=gcx, omega_cx=omega_cx, gcy=gcy, omega_cy=omega_cy,
-            eps=eps, include_hartree=include_hartree, Vb=Vb, Vc=Vc, Gamma_ph=Gamma_ph
+            eps=eps,
+            include_hartree=include_hartree, include_phonon=include_phonon,
+            lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=Vb, Vc=Vc, Gamma_ph=Gamma_ph
         )
         return om_idx, result
-
 
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
         futures = {
@@ -1176,3 +1209,24 @@ def get_dc_coefficient(omegas, chi_imag, omega_cutoff=None):
 def find_DC_limit(omega0, chi_imag):
     left, right = find_flat_regime(omega0, chi_imag)
     return get_dc_coefficient(omega0[left:right], chi_imag[left:right])[0]
+
+''' phonon kernel '''
+def D(lam, om, omega, Gamma_ph):
+    return -lam / (1 - (omega/om + 1j*Gamma_ph)**2)
+
+def thetas_ph(Vb, Vc, include_hartree, lam_b, om_b, lam_c, om_c, omega, Gamma_ph):
+    Db = D(lam_b, om_b, omega, Gamma_ph)
+    if include_hartree:
+        if Vc == 0:
+            theta = np.array([Vb/2, Db, Db, -Vb/2])
+        else:
+            Dc = D(lam_c, om_c, omega, Gamma_ph)
+            theta = np.array([Vb/2, Db, Db, -Vb/2,
+                              Vc/2, Dc, Dc, -Vc/2])
+    else:
+        if Vc == 0:
+            theta = np.array([Db, Db])
+        else:
+            Dc = D(lam_c, om_c, omega, Gamma_ph)
+            theta = np.array([Db, Db, Dc, Dc])
+    return theta
