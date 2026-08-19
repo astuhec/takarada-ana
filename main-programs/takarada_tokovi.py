@@ -979,14 +979,11 @@ def compute_single_om_fused(
     gby=None, omega_by=None,
     gcx=None, omega_cx=None,
     gcy=None, omega_cy=None,
-    eps=1e-5, phonon=None, include_hartree=True, Vb=None, Vc=None, Gamma_ph=None
+    eps=1e-5, include_hartree=True, Vb=None, Vc=None, Gamma_ph=None
 ):
     Nop = len(thetas)
     
-    if not phonon:
-        thetas_diag = np.diag(thetas)
-    else:
-        thetas_diag = np.diag(thetas_phonon(om, include_hartree, Vb, Vc, gbx, omega_bx, gby, omega_by, gcx, omega_cx, gcy, omega_cy, Gamma_ph))
+    thetas_diag = np.diag(thetas)
     I = np.eye(Nop)
 
     # ── ONE precomputation pass for this omega ──────────────────────────
@@ -1037,7 +1034,7 @@ def compute_chi(
     gby=None, omega_by=None,
     gcx=None, omega_cx=None,
     gcy=None, omega_cy=None,
-    phonon=False, include_hartree=True,
+    include_hartree=True,
     n_workers=None, #None: number of CPU cores, or specify an integer
     eps=1e-5, Vb=None, Vc=None, Gamma_ph=None
 ):
@@ -1063,7 +1060,7 @@ def compute_chi(
             thetas, tok_tilde, mat_tilde,
             energije, rhos_tilde,
             gbx=gbx, omega_bx=omega_bx, gby=gby, omega_by=omega_by, gcx=gcx, omega_cx=omega_cx, gcy=gcy, omega_cy=omega_cy,
-            eps=eps, phonon=phonon, include_hartree=include_hartree, Vb=Vb, Vc=Vc, Gamma_ph=Gamma_ph
+            eps=eps, include_hartree=include_hartree, Vb=Vb, Vc=Vc, Gamma_ph=Gamma_ph
         )
         return om_idx, result
 
@@ -1179,34 +1176,3 @@ def get_dc_coefficient(omegas, chi_imag, omega_cutoff=None):
 def find_DC_limit(omega0, chi_imag):
     left, right = find_flat_regime(omega0, chi_imag)
     return get_dc_coefficient(omega0[left:right], chi_imag[left:right])[0]
-    
-# adding phonon
-def D0(omega, omega_ph, Gamma_ph):
-    return 2 * omega_ph / ((omega + 1j * Gamma_ph)**2 - omega_ph**2)
-
-def thetas_phonon(omega, include_hartree, Vb, Vc,
-                  gbx, omega_bx, gby, omega_by, gcx, omega_cx, gcy, omega_cy, Gamma_ph):
-    if include_hartree:
-        thetas = np.zeros(8, dtype=np.complex128)
-        thetas[0] = Vb/2 + Vc/2
-        thetas[3] = Vb + Vc/2
-    else:
-        thetas = np.zeros(4, dtype=np.complex128)
-
-    Dbx = D0(omega, omega_bx, Gamma_ph)
-    Dby = D0(omega, omega_by, Gamma_ph)
-    Dcx = D0(omega, omega_cx, Gamma_ph)
-    Dcy = D0(omega, omega_cy, Gamma_ph)
-
-    if include_hartree:
-        thetas[1] = gbx**2 * Dbx
-        thetas[2] = gby**2 * Dby
-        thetas[5] = gcx**2 * Dcx
-        thetas[6] = gcy**2 * Dcy
-    else:
-        thetas[0] = gbx**2 * Dbx
-        thetas[1] = gby**2 * Dby
-        thetas[2] = gcx**2 * Dcx
-        thetas[3] = gcy**2 * Dcy
-
-    return thetas
