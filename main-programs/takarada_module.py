@@ -179,7 +179,7 @@ class model:
         #print(self.mu)
         self.delta_b, self.delta_c = helpers.Delta(self.K, self.rho, self.Vb, self.Vc)
 
-    def run_Tdependence(self, input_phonon=None, k=None, n=None,
+    def run_Tdependence(self, k=None, n=None,
                         beta=None, scale=None, Nbeta=None):
                         
         ''' read input parameter and initialize the system '''
@@ -217,21 +217,6 @@ class model:
         betas = betas0 / scale**np.arange(1, Nbetas+1)
         max_stop = int(Nbetas // freq_betas)
         stops = [freq_betas*i for i in range(1, max_stop+1)]
-        phonon = config.get("phonon")
-
-        if phonon:
-
-            config_phonon = load_config(input_phonon)
-
-            gbx = config_phonon.get("gbx")
-            gby = config_phonon.get("gby")
-            gcx = config_phonon.get("gcx")
-            gcy = config_phonon.get("gcy")
-            omega_bx = config_phonon.get("omega_bx")
-            omega_by = config_phonon.get("omega_by")
-            omega_cx = config_phonon.get("omega_cx")
-            omega_cy = config_phonon.get("omega_cy")
-            Gamma_ph = config_phonon.get("Gamma_ph")
 
         if evaluate_vertex_DC:
             nodes, weights = roots_legendre(deg)
@@ -283,15 +268,7 @@ class model:
                 
                 if evaluate_vertex_DC:
                     ''' Kubo's DC coefficients, bubble and corrections '''
-                    if not phonon:
-                        self.DC_bubble_corr(nodes, weights, Gammas, omega0, eps2, n_workers=n_workers)
-                    else:
-                        self.DC_bubble_corr(nodes, weights, Gammas, omega0, eps2,
-                                            gbx=gbx, omega_bx=omega_bx,
-                                            gby=gby, omega_by=omega_by,
-                                            gcx=gcx, omega_cx=omega_cx,
-                                            gcy=gcy, omega_cy=omega_cy,
-                                            Gamma_ph=Gamma_ph, phonon=phonon, n_workers=n_workers)
+                    self.DC_bubble_corr(nodes, weights, Gammas, omega0, eps2, n_workers=n_workers)
                         
                 if i > 0:
                     self.rho = rho_save
@@ -304,7 +281,7 @@ class model:
             msg = f'Progress {np.round(i/len(betas), 3)}. beta={np.round(1/self.T, 1)}, n={np.round(self.n)}, delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}'
             print(msg, flush=True)
     
-    def run_lowT_dependence(self, input_phonon=None, T_start=None, T_end=None, T_stable=None,
+    def run_lowT_dependence(self, T_start=None, T_end=None, T_stable=None,
                         threshold=0.02, window=5, safety=10, window0=20, r2_threshold=0.99):
         # find interval where mu(T) makes sense (linear) or provide region by putting T_start, T_end, T_stable
 
@@ -336,7 +313,7 @@ class model:
         self.delta_c = self.delta_c_GS
 
         count = len(self.Ts)
-        self.run_Tdependence(input_phonon=input_phonon, k=k, n=n,
+        self.run_Tdependence(k=k, n=n,
                              beta=beta_initial, Nbeta=Nbeta_correction, scale=scale_correction)
         self.stable_index = stable_index
         self.Ncorrection = len(self.Ts) - count
@@ -419,12 +396,7 @@ class model:
         self.L22_boltz.append(helpers.to_scalar_if_single(l22_boltz))
         self.L12_boltz.append(helpers.to_scalar_if_single(l12_boltz))
 
-    def DC_bubble_corr(self, nodes, weights, Gammas, omega0, eps,
-                       gbx=None, omega_bx=None,
-                       gby=None, omega_by=None,
-                       gcx=None, omega_cx=None,
-                       gcy=None, omega_cy=None,
-                       Gamma_ph=None, phonon=False, n_workers=None):
+    def DC_bubble_corr(self, nodes, weights, Gammas, omega0, eps, n_workers=None):
         Ngamma = len(Gammas)
 
         l11_0 = np.zeros(Ngamma)
@@ -439,17 +411,7 @@ class model:
             mu_ = self.mu / Gamma
             invt = Gamma / self.T
             
-            if not phonon:
-                results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers)
-            else:
-                results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers,
-                                         gbx=gbx, omega_bx=omega_bx,
-                                         gby=gby, omega_by=omega_by,
-                                         gcx=gcx, omega_cx=omega_cx,
-                                         gcy=gcy, omega_cy=omega_cy,
-                                         Gamma_ph=Gamma_ph, phonon=True, include_hartree=self.include_hartree, Vb=self.Vb, Vc=self.Vc)
-
-            ##np.savez(f'results{len(self.Ts)}.npz', **results)
+            results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers)
             
             Chi_jj0 = - results['chi_jj0'].imag
             dChi_jj  = - results['dchi_jj'].imag
