@@ -108,6 +108,7 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True):
                     # check if the delta functions coming from CAR prohibit these MF terms
                     if orb1==orb1_ and x==x_: deltas=0.0
                     elif orb1_==orb2 and x_==0: deltas=0.0
+
                 if deltas==0.0:
                     continue
                 else:
@@ -115,6 +116,7 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True):
 
                     # ---------- M3 ---------- first term in equation
                     M3[orb1,orb2] += -1j * t * V_ * lega * phase_k * n[orb1_] / Nk
+                    print(orb1,orb2,t,V_, np.max(np.abs(-1j * t * V_ * lega * phase_k * n[orb1_] / Nk)))
 
                     # ---------- M6 ---------- second term in equation
                     suma = np.sum(rho[orb2,orb1,:] * phase_k)
@@ -143,6 +145,7 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True):
                     # check if the delta functions coming from CAR prohibit these MF terms
                     if orb1==orb1_ and x_==0.0: deltas=0.0
                     if orb1_==orb2 and x+x_==0.0: deltas=0.0
+                    
                 if deltas==0.0:
                     continue
                 else:
