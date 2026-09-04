@@ -68,7 +68,7 @@ def G_ffts(phases, Nk):
             g_ffts_M4b2[l,m,:] = np.fft.fft(np.fft.ifftshift(g))
     return g_ffts_M4a1, g_ffts_M4a2, g_ffts_M4b1, g_ffts_M4b2
 
-def compute_all_mf_matrices(K, rho, geom, phases, g_ffts):
+def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True):
     Nk = len(K)
 
     M3  = np.zeros((2,2,Nk), dtype=np.complex128)
@@ -102,10 +102,12 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts):
         for m, (x_, orb1_, orb2_, V_) in enumerate(geom["interaction"]):
             orb1_, orb2_ = int(orb1_), int(orb2_)
             if orb2 == orb2_:
-                # check if the delta functions coming from CAR prohibit these MF terms
-                if orb1==orb1_ and x==x_: deltas=0.0
-                elif orb1_==orb2 and x_==0: deltas=0.0
-                else: deltas=1.0
+
+                deltas=1.0
+                if impose_deltas:
+                    # check if the delta functions coming from CAR prohibit these MF terms
+                    if orb1==orb1_ and x==x_: deltas=0.0
+                    elif orb1_==orb2 and x_==0: deltas=0.0
                 if deltas==0.0:
                     continue
                 else:
@@ -136,10 +138,11 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts):
                     M4b[orb1,orb1_] += gh
 
             if orb1 == orb2_:
-                # check if the delta functions coming from CAR prohibit these MF terms
-                if orb1==orb1_ and x_==0.0: deltas=0.0
-                elif orb1_==orb2 and x+x_==0.0: deltas=0.0
-                else: deltas=1.0
+                deltas=1.0
+                if impose_deltas:
+                    # check if the delta functions coming from CAR prohibit these MF terms
+                    if orb1==orb1_ and x_==0.0: deltas=0.0
+                    if orb1_==orb2 and x+x_==0.0: deltas=0.0
                 if deltas==0.0:
                     continue
                 else:
