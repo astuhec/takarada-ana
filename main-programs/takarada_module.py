@@ -14,7 +14,10 @@ def load_config(path):
 ''' Takarada model '''
 class model:
     def __init__(self, input_file, compute_gap_infty=True, verbose=True,
-                 b=None, t=None, t_=None, t12=None, epsilon=None, epsilon_=None, Vb=None, Vc=None, delta=None):
+                 b=None, t=None, t_=None, t12=None, epsilon=None, epsilon_=None, Vb=None, Vc=None, delta=None, mazza=None, delta_mazza=None):
+
+        self.mazza=mazza
+        self.delta_mazza=delta_mazza
         
         ''' read input parameter and initialize the system '''
     
@@ -92,7 +95,7 @@ class model:
                 f'V0={self.Vb}' + '\n' + \
                 f'V1={self.Vc}' + '\n' + '=' * 80, flush=True)
                 
-        self.hk0 = helpers.h_k0(self.K, self.phys_parameters)
+        self.hk0 = helpers.h_k0(self.K, self.phys_parameters, mazza=self.mazza, delta_mazza=self.delta_mazza)
 
         if compute_gap_infty:
             print(self.Vb, self.Vc, self.t12)
@@ -144,7 +147,7 @@ class model:
     def GS(self):
         rho0 = helpers.rho0(self.Nk)
         rho, err, energije, vecs, fs, n = helpers.Rho_next(self.hk0, rho0, self.K, 0, self.mu, self.Vb, self.Vc, self.eps0,
-                                                  self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, mix=0.5)
+                                                  self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, mix=0.5, mazza=self.mazza)
         self.rho = rho
         self.energije = energije
         self.vecs = vecs
