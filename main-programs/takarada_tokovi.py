@@ -116,7 +116,6 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True):
 
                     # ---------- M3 ---------- first term in equation
                     M3[orb1,orb2] += -1j * t * V_ * lega * phase_k * n[orb1_] / Nk
-                    print(orb1,orb2,t,V_, np.max(np.abs(-1j * t * V_ * lega * phase_k * n[orb1_] / Nk)))
 
                     # ---------- M6 ---------- second term in equation
                     suma = np.sum(rho[orb2,orb1,:] * phase_k)
