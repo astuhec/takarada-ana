@@ -2,12 +2,10 @@ import numpy as np
 import scipy.linalg as LA
 from numba import njit, prange
 from scipy.linalg import expm
-from tqdm import tqdm
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy import linalg as LA
 
-from takarada_helpers import parameters, h_k, Delta, delta_approximation
+from takarada_helpers import h_k, Delta, delta_approximation
 
 ''' current operator '''
 @njit(cache=True)
@@ -68,6 +66,7 @@ def G_ffts(phases, Nk):
             g_ffts_M4b2[l,m,:] = np.fft.fft(np.fft.ifftshift(g))
     return g_ffts_M4a1, g_ffts_M4a2, g_ffts_M4b1, g_ffts_M4b2
 
+''' I thought imposing deltas by hand is necessary but it doesn't make a change (so impose_deltas=True,False give the same) '''
 def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True):
     Nk = len(K)
 
@@ -109,9 +108,7 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True):
                     if orb1==orb1_ and x==x_: deltas=0.0
                     elif orb1_==orb2 and x_==0: deltas=0.0
 
-                if deltas==0.0:
-                    continue
-                else:
+                if deltas!=0.0:
                     lega = geom["pos"][orb2] - geom["pos"][orb1_] - x_
 
                     # ---------- M3 ---------- first term in equation
@@ -145,9 +142,7 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True):
                     if orb1==orb1_ and x_==0.0: deltas=0.0
                     if orb1_==orb2 and x+x_==0.0: deltas=0.0
                     
-                if deltas==0.0:
-                    continue
-                else:
+                if deltas!=0.0:
                     lega = geom["pos"][orb1] - geom["pos"][orb1_] - x_
                     
                     # ---------- M3 ---------- first term in equation
@@ -316,7 +311,7 @@ def mf_matrix4(K, rho, pos, kinetic, interaction):
                             matrix[orb1, orb1_] += gh
     return -matrix
 
-''' Lorentzian spectral function at fix momentum '''
+''' Lorentzian spectral function at fixed momentum '''
 @njit
 def spektralna_k(epsilon, mu, energije_k, Gamma):
     N_orb = len(energije_k)
@@ -325,7 +320,7 @@ def spektralna_k(epsilon, mu, energije_k, Gamma):
         A[orb] = 1/np.pi * Gamma / ( (epsilon - (energije_k[orb] - mu))**2 + Gamma**2 )
     return A
 
-''' spectral function for all momenta and an array of epsilons '''
+''' spectral function for all momenta '''
 @njit(parallel=True, cache=True)
 def Spektralka(epsilons, mu, energije, Gamma):
     Nk = energije.shape[1]
@@ -338,7 +333,8 @@ def Spektralka(epsilons, mu, energije, Gamma):
             A[i,:,m] = A_k
     return A
 
-''' Kubo transport function. I will input mat1=mat2=current '''
+''' Kubo transport function, coming from bubble between two single-body operators
+    e.g. for K0 I will input mat1=mat2=current  '''
 @njit(parallel=True, cache=True)
 def phi_Kubo(K, mat1, mat2, spektralka, epsilons):
     Nk = len(K)
@@ -355,7 +351,7 @@ def phi_Kubo(K, mat1, mat2, spektralka, epsilons):
                 phi += 2 * (mat1[a,b,m] * A[:,b,m] * mat2[b,a,m] * A[:,a,m])
     return phi / Nk
 
-''' same as phi_Kubo, but neglecting overlap of spectral function in different bands '''
+''' same as phi_Kubo, but neglecting overlap of spectral function in different bands due to Gamma << gap'''
 @njit(parallel=True, cache=True)
 def phi_Kubo_diagonal(K, mat1, mat2, spektralka, omegas):
     Nk = len(K)
@@ -424,6 +420,7 @@ def kahan_sum(vals):
         total = t
     return total
 
+''' Boltzmann transport coefficients '''
 def Kn_boltz(K, energije, mu, T):
     Nk = len(K)
     dK = K[1] - K[0]
@@ -493,7 +490,6 @@ def evolve_rho_kernel(Hk, rho, dt):
     for j in prange(Nk):
         hk = Hk[:,:,j]
 
-        # Decompose H = ε I + d·σ, ε I do not actually need
         dx  = 0.5 * (hk[0,1] + hk[1,0]).real
         dy  = -0.5 * (hk[0,1] - hk[1,0]).imag
         dz  = 0.5 * (hk[0,0] - hk[1,1]).real
@@ -781,7 +777,7 @@ def integral_omega(integrand, omega):
     else:
         return np.trapz(integrand.real, omega)
 
-''' this is just helpers to get local maxima and local minima. I use this to get the envelope of the response '''
+''' this is just a helper to get local maxima and local minima. I use this to get the envelope of the response '''
 def local_minima(arr):
     n = len(arr)
     indices, vals = [], []
@@ -801,8 +797,8 @@ sigmas[1] = np.array([[0,1],[1,0]])
 sigmas[2] = np.array([[0,-1j], [1j,0]])
 sigmas[3] = np.diag([1,-1])
 
+''' interaction kernel Theta for RPA equations '''
 def rho_operators(K, Vb, Vc, include_hartree):
-
     if include_hartree:
         thetas = np.array([Vb/2, -Vb/2, -Vb/2, -Vb/2,
                             Vc/2, -Vc/2, -Vc/2, -Vc/2])
@@ -820,6 +816,7 @@ def rho_operators(K, Vb, Vc, include_hartree):
     else: deltas = [0, 1]
 
     rhos = np.zeros((len(thetas), 2, 2, len(K)), dtype=np.complex128)
+    ''' matrix element of pseudo-density operators in orbital basis '''
     for i, delta in enumerate(deltas):
         for j, nu in enumerate(nus):
             ind = len(nus) * i + j
@@ -835,6 +832,8 @@ def rho_operators(K, Vb, Vc, include_hartree):
 def fd(eps, mu, T):
     return 1.0 / (np.exp((eps - mu) / T) + 1.0)
 
+''' Pi(omega) bubble integral. I rescale energies by Gamma and use Gauss-Legendre quadrature
+    because I need to integrate from -infty to +infty, but integrand is big only at poles of Green's functions)'''
 @njit(cache=True)
 def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, mu_, invt, nodes, weights, eps=1e-5, n_eps=1.0):
     w    = omega / Gamma
@@ -940,6 +939,7 @@ def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, mu_, invt, nodes, weights, eps=1e-
 
     return res_mn, res_nm, res_w_mn, res_w_nm
 
+''' I precompute Pi_mn for all m,n,k for a fixed omega. this object is then used for all bubbles with different vertices attached '''
 @njit(parallel=True, cache=True)
 def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-5):
     Norb, Nk = energije.shape
@@ -961,6 +961,7 @@ def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-
                 piw_nm[m, n, j] = pie_nmk
     return pi_mn, pi_nm, piw_mn, piw_nm
 
+''' bubble susceptibility between U and V (need to be in band basis,i.e. tilde versions) '''
 @njit(parallel=True, cache=True)
 def chi_UV(Nk, U, V, pi_mn, pi_nm):
     Norb = U.shape[-2]
@@ -988,6 +989,7 @@ def chi_UV(Nk, U, V, pi_mn, pi_nm):
 
     return chi / Nk
 
+''' for fixed omega this calculates all susceptibilities '''
 def compute_single_om_fused(
     om,
     Nk, Gamma, mu_, invt, nodes, weights,
@@ -1010,12 +1012,12 @@ def compute_single_om_fused(
 
     I = np.eye(Nop)
 
-    # ── ONE precomputation pass for this omega ──────────────────────────
+    # ── single precomputation of bubble for this omega ──────────────────────────
     pi_mn, pi_nm, piw_mn, piw_nm = precompute_Pi_all(
         om, energije, Gamma, mu_, invt, nodes, weights, eps
     )
 
-    # ── chi0 matrix  (Nop x Nop calls, but now cheap) ──────────────────
+    # ── chi0 matrix ──────────────────
     chi0 = np.zeros((Nop, Nop), dtype=np.complex128)
     for i in range(Nop):
         for j in range(Nop):
@@ -1037,7 +1039,7 @@ def compute_single_om_fused(
         chi_jErho0[i] = chi_UV(Nk, tok_tilde,    rhos_tilde[i], piw_mn, piw_nm)
         chi_matrho0[i] = chi_UV(Nk, mat_tilde, rhos_tilde[i], pi_mn, pi_nm)
 
-    # ── RPA ────────────────────────────────────────────────────────────
+    # ── RPA corrections ────────────────────────────────────────────────────────────
     mat     = I - chi0 @ thetas_diag
     inv     = LA.inv(mat)
     chi_rpa = inv @ chi0
@@ -1047,6 +1049,7 @@ def compute_single_om_fused(
 
     return om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jEj0, dchi_jEj, chi_matj0, dchi_matj, chi_rhoj0
 
+''' susceptibilities for an array of omegas '''
 def compute_chi(
     omegas,
     Nk, Gamma, mu_, invt, nodes, weights,
@@ -1159,6 +1162,7 @@ def compute_chi(
     
     return results
 
+''' the following few functions are used to get DC limit of coefficients '''
 def find_flat_regime(omegas, chi_omega, window=10):
     """
     Find flattest window in dchi_domega, using sliding window in LOG omega space.
@@ -1229,10 +1233,11 @@ def find_DC_limit(omega0, chi_imag):
     left, right = find_flat_regime(omega0, chi_imag)
     return get_dc_coefficient(omega0[left:right], chi_imag[left:right])[0]
 
-''' phonon kernel '''
+''' phonon propagator '''
 def D(lam, om, omega, Gamma_ph):
     return -lam / (1 - (omega/om + 1j*Gamma_ph)**2)
 
+''' interaction kernel entering RPA equations in case of interaction + phonon '''
 def thetas_ph(Vb, Vc, include_hartree, lam_b, om_b, lam_c, om_c, omega, Gamma_ph):
     Db = D(lam_b, om_b, omega, Gamma_ph)
     if include_hartree:

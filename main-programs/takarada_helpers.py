@@ -26,6 +26,7 @@ def parameters(b, t, t_, t12, Vb, Vc, delta=0):
     ])
 
     ''' x, orb1, orb2, interaction '''
+    # factors 1/2 because I split n_a*n_b into 0.5*(n_a*n_b + n_b*n_a)
     interaction = np.array([
         (0, 0, 1, Vb / 2),
         (0, 1, 0, Vb / 2),
@@ -43,7 +44,96 @@ def rho0(Nk):
     rho[0,0,:] = 1.
     return rho
 
-''' helper functions to calculate gap, <n0>, <n1> '''
+''' kinetic (fixed) part of the Hamiltonian; for me delta is always zero
+    mazza parameters are only relevant to imitate Denis' program lattice_1d_2b_optical_abinitio with mean field  '''
+def h_k0(K, phys_parameters, mazza=None, delta_mazza=None):
+    b, t, t_, t12, epsilon, epsilon_, Vb, Vc, delta = phys_parameters
+    
+    Nk = len(K)
+    hk = np.zeros((2, 2, Nk), dtype=np.complex128)
+
+    if mazza==None:
+        _, kinetic, _ = parameters(b, t, t_, t12, Vb, Vc, delta)
+
+        for line in kinetic:
+            x, orb1, orb2, t = line
+            x, orb1, orb2, t = float(x), int(orb1), int(orb2), float(t)
+            hk[orb1,orb2] += t * np.exp(-1j*K*x)
+
+        # add onsite energies, which are not included in kinetic
+        hk[0,0] += -epsilon
+        hk[1,1] += epsilon_
+
+    elif mazza:
+        tTa=-0.72/0.3
+        tNi=1.0
+        epsTa=1.35/0.3
+        epsNi=-0.36/0.3
+        hk[0,0] += epsNi + 2.0*tNi*np.cos(K) - 0.5*delta_mazza
+        hk[1,1] += epsTa + 2.0*tTa*np.cos(K) + 0.5*delta_mazza
+        hk[0,1] += (1-np.exp(1j*K)) * 0.116/0.3*np.sqrt(2)
+        hk[1,0] += (1-np.exp(-1j*K)) * 0.116/0.3*np.sqrt(2)
+    return hk
+
+''' amplitudes delta_b, delta_c of the order parameter ( delta_k = delta_b + delta_c * exp(ik) ) '''
+@njit
+def Delta(K, rho, Vb, Vc):
+    Nk = len(K)
+    deltas = [0., 1.]
+    phi_b = np.sum(rho[1,0] * np.exp(1j*K * deltas[0]))
+    phi_c = np.sum(rho[1,0]  * np.exp(1j*K * deltas[1]))
+    return - np.array([Vb * phi_b, Vc * phi_c], dtype=np.complex128) / np.float64(Nk)
+
+''' full hamiltonian, built from kinetic part hk0 and the self-energy
+if include_hartree=True, I add also Hartree self-energy. in practice I do use Hartree
+if include_hartree=False, I have only Fock (off-diagonal) self-energy.
+a small eps0 is used in first couple of iterations to produce an excitonic state '''
+def h_k(K, hk0, rho, Vb, Vc, eps0, include_hartree, mazza=None):
+    if mazza==None:
+        delta_b, delta_c = Delta(K, rho, Vb, Vc)
+
+        Nk = rho.shape[-1]
+        hk = hk0.copy()
+
+        # Fock term:
+        delta_k = delta_b + delta_c * np.exp(-1j*K)
+        hk[0,1,:] += delta_k
+        hk[1,0,:] += delta_k.conj()
+
+        # Hartree term:
+        if include_hartree:
+            hk[0,0,:] += (Vb + Vc) * np.sum(rho[1,1,:]) / Nk
+            hk[1,1,:] += (Vb + Vc) * np.sum(rho[0,0,:]) / Nk
+
+        # simulate a perturbation to break symmetry
+        if eps0 != 0:
+            hk[0,1,:] += eps0 * np.exp(-1j*K)
+            hk[1,0,:] += - eps0 * np.exp(1j*K)
+
+    elif mazza:
+        delta_b, delta_c = Delta(K, rho, Vb, Vc)
+
+        Nk = rho.shape[-1]
+        hk = hk0.copy()
+
+        # Fock term:
+        delta_k = delta_b * (Vb+Vc)/Vb#+ delta_c * np.exp(1j*K)
+        hk[1,0,:] += delta_k
+        hk[0,1,:] += delta_k.conj()
+
+        # Hartree term:
+        if include_hartree:
+            hk[0,0,:] += (Vb) * np.sum(rho[1,1,:]) / Nk
+            hk[1,1,:] += (Vb) * np.sum(rho[0,0,:]) / Nk
+
+        # simulate a perturbation to break symmetry
+        if eps0 != 0:
+            hk[0,1,:] += eps0 * np.exp(-1j*K)
+            hk[1,0,:] += - eps0 * np.exp(1j*K)
+
+    return hk
+
+''' helper functions to calculate gap '''
 def Gap(energije, delta_b, delta_c, Vb, Vc, epsilon_threshold, gap_infty):
     condition = False
     if Vb != 0 and Vc != 0:
@@ -63,6 +153,7 @@ def Gap(energije, delta_b, delta_c, Vb, Vc, epsilon_threshold, gap_infty):
         gap = np.min(energije[1]) - np.max(energije[0])
     return gap
 
+''' helper function to calculate <n0>,<n1> '''
 def Ns(rho, energije_infty, delta_b, delta_c, Vb, Vc, epsilon_threshold, T, mu):
     Nk = rho.shape[-1]
     condition = False
@@ -98,95 +189,6 @@ def Gap_tilde(rho, phys_parameters):
     gaptilde = gap0 + (Vb + Vc) * (n0 - n1)
     return gaptilde
 
-''' kinetic (fixed) part of the Hamiltonian; for me delta is always zero '''
-def h_k0(K, phys_parameters, mazza=None, delta_mazza=None):
-    b, t, t_, t12, epsilon, epsilon_, Vb, Vc, delta = phys_parameters
-    
-    Nk = len(K)
-    hk = np.zeros((2, 2, Nk), dtype=np.complex128)
-
-    if mazza==None:
-        _, kinetic, _ = parameters(b, t, t_, t12, Vb, Vc, delta)
-
-        for line in kinetic:
-            x, orb1, orb2, t = line
-            x, orb1, orb2, t = float(x), int(orb1), int(orb2), float(t)
-            hk[orb1,orb2] += t * np.exp(-1j*K*x)
-
-        # add onsite energies, which are not included in kinetic
-        hk[0,0] += -epsilon
-        hk[1,1] += epsilon_
-
-    elif mazza:
-        tTa=-0.72/0.3
-        tNi=1.0
-        epsTa=1.35/0.3
-        epsNi=-0.36/0.3
-        hk[0,0] += epsNi + 2.0*tNi*np.cos(K) - 0.5*delta_mazza
-        hk[1,1] += epsTa + 2.0*tTa*np.cos(K) + 0.5*delta_mazza
-        hk[0,1] += (1-np.exp(1j*K)) * 0.116/0.3*np.sqrt(2)
-        hk[1,0] += (1-np.exp(-1j*K)) * 0.116/0.3*np.sqrt(2)
-
-    return hk
-
-''' amplitudes delta_b, delta_c of the order parameter ( delta_k = delta_b + delta_c * exp(ik) ) '''
-@njit
-def Delta(K, rho, Vb, Vc):
-    Nk = len(K)
-    deltas = [0., 1.]
-    phi_b = np.sum(rho[1,0] * np.exp(-1j*K * deltas[0]))
-    phi_c = np.sum(rho[1,0]  * np.exp(-1j*K * deltas[1]))
-    return - np.array([Vb * phi_b, Vc * phi_c], dtype=np.complex128) / np.float64(Nk)
-
-''' full hamiltonian, built from kinetic part hk0 and the self-energy
-if include_hartree=True, I add also Hartree self-energy,
-if include_hartree=False, I have only Fock (off-diagonal) self-energy.
-a small eps0 is used in first couple of iterations to produce an excitonic state '''
-def h_k(K, hk0, rho, Vb, Vc, eps0, include_hartree, mazza=None):
-    if mazza==None:
-        delta_b, delta_c = Delta(K, rho, Vb, Vc)
-
-        Nk = rho.shape[-1]
-        hk = hk0.copy()
-
-        # Fock term:
-        delta_k = delta_b + delta_c * np.exp(1j*K)
-        hk[1,0,:] += delta_k
-        hk[0,1,:] += delta_k.conj()
-
-        # Hartree term:
-        if include_hartree == True:
-            hk[0,0,:] += (Vb + Vc) * np.sum(rho[1,1,:]) / Nk
-            hk[1,1,:] += (Vb + Vc) * np.sum(rho[0,0,:]) / Nk
-
-        # simulate a perturbation to break symmetry
-        if eps0 != 0:
-            hk[0,1,:] += eps0 * np.exp(-1j*K)
-            hk[1,0,:] += - eps0 * np.exp(1j*K)
-
-    elif mazza:
-        delta_b, delta_c = Delta(K, rho, Vb, Vc)
-
-        Nk = rho.shape[-1]
-        hk = hk0.copy()
-
-        # Fock term:
-        delta_k = delta_b * (Vb+Vc)/Vb#+ delta_c * np.exp(1j*K)
-        hk[1,0,:] += delta_k
-        hk[0,1,:] += delta_k.conj()
-
-        # Hartree term:
-        if include_hartree == True:
-            hk[0,0,:] += (Vb) * np.sum(rho[1,1,:]) / Nk
-            hk[1,1,:] += (Vb) * np.sum(rho[0,0,:]) / Nk
-
-        # simulate a perturbation to break symmetry
-        if eps0 != 0:
-            hk[0,1,:] += eps0 * np.exp(-1j*K)
-            hk[1,0,:] += - eps0 * np.exp(1j*K)
-
-    return hk
-
 ''' Fermi-Dirac function '''
 @njit
 def fd(eps, mu, T):
@@ -196,10 +198,9 @@ def fd(eps, mu, T):
 def H_diagonalize(hamiltonian, K, T, mu):
     Nk = len(K)
 
-    # ── Batch diagonalize unique k-points: i = 0, 1, ..., Nk//2 ──────
-    # hamiltonian: (2, 2, Nk) -> np.linalg.eigh expects (batch, 2, 2)
-    H_batch = hamiltonian.transpose(2, 0, 1)                # (Nk, 2, 2)
-    n_unique = Nk // 2 + 1                                  # indices 0..Nk//2
+    # ── batch diagonalize unique k-points: i = 0, 1, ..., Nk//2 ──────
+    H_batch = hamiltonian.transpose(2, 0, 1)
+    n_unique = Nk // 2 + 1
 
     en_batch, v_batch = np.linalg.eigh(H_batch[:n_unique])  # (n_unique, 2), (n_unique, 2, 2)
 

@@ -23,7 +23,7 @@ class model:
     
         config = load_config(input_file)
 
-        # Override values if explicitly provided
+        # Override values if explicitly provided, otherwise read parameters from input_file
 
         overrides = {
             "b": b,
@@ -98,7 +98,6 @@ class model:
         self.hk0 = helpers.h_k0(self.K, self.phys_parameters, mazza=self.mazza, delta_mazza=self.delta_mazza)
 
         if compute_gap_infty:
-            print(self.Vb, self.Vc, self.t12)
             self.energy_infty, self.mu_infty, self.gap_infty = Gap_infty(input_file, self.parameters, self.include_hartree,
                                                                          b=self.b, t=self.t, t_=self.t_, t12=self.t12, epsilon=self.epsilon, epsilon_=self.epsilon_, Vb=self.Vb, Vc=self.Vc, delta=self.delta)
         
