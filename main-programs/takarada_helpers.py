@@ -80,8 +80,8 @@ def h_k0(K, phys_parameters, mazza=None, delta_mazza=None):
 def Delta(K, rho, Vb, Vc):
     Nk = len(K)
     deltas = [0., 1.]
-    phi_b = np.sum(rho[1,0] * np.exp(1j*K * deltas[0]))
-    phi_c = np.sum(rho[1,0]  * np.exp(1j*K * deltas[1]))
+    phi_b = np.sum(rho[0,1] * np.exp(+1j*K * deltas[0]))
+    phi_c = np.sum(rho[0,1]  * np.exp(+1j*K * deltas[1]))
     return - np.array([Vb * phi_b, Vc * phi_c], dtype=np.complex128) / np.float64(Nk)
 
 ''' full hamiltonian, built from kinetic part hk0 and the self-energy
