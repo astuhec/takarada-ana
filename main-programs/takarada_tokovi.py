@@ -19,7 +19,21 @@ def j_tok(K, pos, kinetic):
         j[orb1, orb2] += ad
     return j
 
-''' below is stuff for mean-field approximation of the non-local interaction current operator '''
+''' kinetic energy current operator '''
+@njit(cache=True)
+def jK_tok(K, pos, kinetic):
+    Nk = len(K)
+    jK = np.zeros((2, 2, Nk), dtype=np.complex128)
+    for line in kinetic:
+        x, orb1, orb2, t = line
+        for line_ in kinetic:
+            x_, orb1_, orb2_, t_ = line_
+            if orb2==orb1_:
+                ad = -1j * 0.5 * t * t_ * np.exp(-1j*K*(x+x_)) * (pos[orb1] - pos[orb2_] + x + x_)
+                jK[orb1,orb2_] += ad
+    return jK
+
+@njit(cache=True)
 def input_data(K, pos, kinetic, interaction):
     Nk = len(K)
     geom = dict()
@@ -40,6 +54,7 @@ def input_data(K, pos, kinetic, interaction):
     phases["kin"] = phases_kin
     return geom, phases
 
+''' below is stuff for mean-field approximation of the non-local interaction current operator '''
 def convolution(g, h):
     return np.fft.fftshift(np.fft.ifft(g * h))
 
@@ -351,7 +366,8 @@ def phi_Kubo(K, mat1, mat2, spektralka, epsilons):
                 phi += 2 * (mat1[a,b,m] * A[:,b,m] * mat2[b,a,m] * A[:,a,m])
     return phi / Nk
 
-''' same as phi_Kubo, but neglecting overlap of spectral function in different bands due to Gamma << gap'''
+''' same as phi_Kubo, but neglecting overlap of spectral function in different bands due to Gamma << gap
+    in practice I just use phi_Kubo '''
 @njit(parallel=True, cache=True)
 def phi_Kubo_diagonal(K, mat1, mat2, spektralka, omegas):
     Nk = len(K)
