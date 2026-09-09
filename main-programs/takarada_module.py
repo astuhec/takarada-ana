@@ -533,8 +533,14 @@ class model:
         
         if params["measure_provider"] == 'current':
             measure_provider = self.current
+        elif params["measure_provider"] == 'kinetic_current':
+            currentK = tokovi.jK_tok(self.K, self.pos, self.kinetic, self.epsilon, self.epsilon_, self.mu)
+            measure_provider = currentK
+        elif params["measure_provider"] == 'curent_kinetic_current':
+            currentK = tokovi.jK_tok(self.K, self.pos, self.kinetic, self.epsilon, self.epsilon_, self.mu)
+            measure_provider = [self.current, currentK]
         else:
-            print("Choose a valid measure provider. Currently available : current", flush=True)
+            print("Choose a valid measure provider. Currently available : current, kinetic_current, curent_kinetic_current", flush=True)
 
         times, measurement, norma, delta_bs, delta_cs, ns0, ns1 = tokovi.simulate_pulz(self.K, self.hk0, self.rho, self.Vb, self.Vc, self.include_hartree,
                                                                                        perturbation_operator, measure_provider,
