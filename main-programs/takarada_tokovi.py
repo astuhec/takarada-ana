@@ -21,11 +21,16 @@ def j_tok(K, pos, kinetic):
 
 ''' kinetic energy current operator '''
 @njit(cache=True)
-def jK_tok(K, pos, kinetic):
+def jK_tok(K, pos, kinetic, epsilon, epsilon_, mu):
+    kinetic = list(kinetic)
+    kinetic += [(0,0,0,epsilon-mu),
+                (0,1,1,epsilon_-mu)]
+    kinetic = np.array(kinetic)
     Nk = len(K)
     jK = np.zeros((2, 2, Nk), dtype=np.complex128)
     for line in kinetic:
         x, orb1, orb2, t = line
+        x, orb1, orb2, t = float(x), int(orb1), int(orb2), float(t)
         for line_ in kinetic:
             x_, orb1_, orb2_, t_ = line_
             if orb2==orb1_:
@@ -33,7 +38,7 @@ def jK_tok(K, pos, kinetic):
                 jK[orb1,orb2_] += ad
     return jK
 
-@njit(cache=True)
+#@njit(cache=True)
 def input_data(K, pos, kinetic, interaction):
     Nk = len(K)
     geom = dict()
