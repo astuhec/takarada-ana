@@ -75,7 +75,8 @@ def h_k0(K, phys_parameters, mazza=None, delta_mazza=None):
         hk[1,0] += (1-np.exp(-1j*K)) * 0.116/0.3*np.sqrt(2)
     return hk
 
-''' amplitudes delta_b, delta_c of the order parameter ( delta_k = delta_b + delta_c * exp(ik) ) '''
+''' amplitudes delta_b, delta_c of the order parameter ( delta_k = delta_b + delta_c * exp(ik) )
+    don't forget that rho[0,1]=<c_1^dag c_0>, with indices interchanged '''
 @njit
 def Delta(K, rho, Vb, Vc):
     Nk = len(K)
