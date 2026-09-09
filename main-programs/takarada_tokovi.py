@@ -23,8 +23,8 @@ def j_tok(K, pos, kinetic):
 @njit(cache=True)
 def jK_tok(K, pos, kinetic, epsilon, epsilon_, mu):
     kinetic = list(kinetic)
-    kinetic += [(0,0,0,epsilon-mu),
-                (0,1,1,epsilon_-mu)]
+    kinetic += [(0.0,0.0,0.0,epsilon-mu),
+                (0.0,1.0,1.0,epsilon_-mu)]
     kinetic = np.array(kinetic)
     Nk = len(K)
     jK = np.zeros((2, 2, Nk), dtype=np.complex128)
