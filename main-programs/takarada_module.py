@@ -191,9 +191,9 @@ class model:
         evaluate_vertex_DC = config.get("evaluate_vertex_DC")
 
         print('Started to find temperature dependence of transport coefficients.', flush=True)
-        if evaluate_transport_DC == True:
+        if evaluate_transport_DC:
             print('Will calculate Boltzmann and Kubo bubble DC coefficients.', flush=True)
-        if evaluate_vertex_DC == True:
+        if evaluate_vertex_DC:
             print('Will calculate Kubo bubble DC coefficients and vertex corrections.', flush=True)
         if evaluate_transport_DC == False and evaluate_vertex_DC == False:
             print('Will not calculate transport coefficients, but will find self-consistent rho(T) and mu(T).', flush=True)
@@ -282,7 +282,10 @@ class model:
 
             msg = f'Progress {np.round(i/len(betas), 3)}. beta={np.round(1/self.T, 1)}, n={np.round(self.n)}, delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}'
             print(msg, flush=True)
-    
+
+    ''' this is to get lowT dependnece, with the knowledge of mu(T)=(e_c+e_v)/2 + k*T
+        the slope k of the linear term is obtained from mu(T) where it is stable
+        this is done because mu(T) can have discontinuities with run_Tdependence if starting with high beta like 200'''
     def run_lowT_dependence(self, T_start=None, T_end=None, T_stable=None,
                         threshold=0.02, window=5, safety=10, window0=20, r2_threshold=0.99):
         # find interval where mu(T) makes sense (linear) or provide region by putting T_start, T_end, T_stable
@@ -320,10 +323,12 @@ class model:
         self.stable_index = stable_index
         self.Ncorrection = len(self.Ts) - count
 
+    ''' go back to ground state '''
     def reset(self, mu0) -> None:
         self.GS()
         self.mu = mu0
-    
+
+    ''' evaluate self-consistent non-local heat current operator, and transform operators into band basis (tilde) '''
     def velocities(self) -> None:
         self.current_tilde = tokovi.operator_tilde(self.current, self.vecs)
         m3, m6, m4a, m4b = tokovi.compute_all_mf_matrices(self.K, self.rho, self.geom, self.phases, self.g_ffts, impose_deltas=True)
@@ -338,7 +343,7 @@ class model:
         phiQ2 = tokovi.phi_Kubo(self.K, self.mat_tilde, self.mat_tilde, spektralka, epsilons)
         if dict_form == None:
             return phi, phiQ, phiQ2
-        elif dict_form == True:
+        elif dict_form:
             phi_boltz = tokovi.phi_Boltzmann(self.K, self.energije, self.mu, epsilons)
             results = {'phi' : phi,
                        'phiQ' : phiQ,
@@ -433,14 +438,14 @@ class model:
             Chi_matj = Chi_matj0 + dChi_matj
             
             if np.max(np.abs(Chi_matj0)) < 1e-14:
-                l12q_0 = 0.0
+                l12q_0[g] = 0.0
             else:
-                l12q_0 = tokovi.find_DC_limit(omega0, Chi_matj0)
+                l12q_0[g] = tokovi.find_DC_limit(omega0, Chi_matj0)
 
             if np.max(np.abs(Chi_matj)) < 1e-14:
-                l12q = 0.0
+                l12q[g] = 0.0
             else:
-                l12q = tokovi.find_DC_limit(omega0, Chi_matj)
+                l12q[g] = tokovi.find_DC_limit(omega0, Chi_matj)
 
         self.L11_0.append(helpers.to_scalar_if_single(l11_0))
         self.L11_corr.append(helpers.to_scalar_if_single(l11))
@@ -635,7 +640,7 @@ def Gap_infty(input_file, parameters, include_hartree,
     m = model(input_file, compute_gap_infty=False, verbose=False, b=b, t=t, t_=t_, t12=t12, epsilon=epsilon, epsilon_=epsilon_, Vb=Vb, Vc=Vc, delta=delta)
     m.GS()  # Compute ground state to populate m.rho
     hk = m.hk0.copy()
-    if include_hartree == True:
+    if include_hartree:
         hk[0,0,:] += (m.Vb + m.Vc) * np.sum(m.rho[1,1,:]) / m.Nk
         hk[1,1,:] += (m.Vb + m.Vc) * np.sum(m.rho[0,0,:]) / m.Nk
     energy_infty = np.zeros((2, m.Nk))
