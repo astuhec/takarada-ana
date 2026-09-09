@@ -22,17 +22,21 @@ def j_tok(K, pos, kinetic):
 ''' kinetic energy current operator '''
 @njit(cache=True)
 def jK_tok(K, pos, kinetic, epsilon, epsilon_, mu):
-    kinetic = list(kinetic)
-    kinetic += [(0.0,0.0,0.0,epsilon-mu),
-                (0.0,1.0,1.0,epsilon_-mu)]
-    kinetic = np.array(kinetic)
+    # Keep hopping and onsite terms in one homogeneous array for Numba.
+    kinetic_full = np.zeros((len(kinetic) + 2, 4), dtype=np.float64)
+    kinetic_full[:len(kinetic)] = kinetic
+    kinetic_full[-2, 3] = epsilon - mu
+    kinetic_full[-1, 1] = 1.0
+    kinetic_full[-1, 2] = 1.0
+    kinetic_full[-1, 3] = epsilon_ - mu
     Nk = len(K)
     jK = np.zeros((2, 2, Nk), dtype=np.complex128)
-    for line in kinetic:
+    for line in kinetic_full:
         x, orb1, orb2, t = line
         x, orb1, orb2, t = float(x), int(orb1), int(orb2), float(t)
-        for line_ in kinetic:
+        for line_ in kinetic_full:
             x_, orb1_, orb2_, t_ = line_
+            x_, orb1_, orb2_, t_ = float(x_), int(orb1_), int(orb2_), float(t_)
             if orb2==orb1_:
                 ad = -1j * 0.5 * t * t_ * np.exp(-1j*K*(x+x_)) * (pos[orb1] - pos[orb2_] + x + x_)
                 jK[orb1,orb2_] += ad
@@ -1015,7 +1019,7 @@ def chi_UV(Nk, U, V, pi_mn, pi_nm):
 def compute_single_om_fused(
     om,
     Nk, Gamma, mu_, invt, nodes, weights,
-    thetas, tok_tilde, mat_tilde,
+    thetas, tok_tilde, tokK_tilde, mat_tilde,
     energije,
     rhos_tilde,
     eps=1e-5,
@@ -1047,17 +1051,20 @@ def compute_single_om_fused(
 
     # ── chi_jj0 ────────────────────────────────────────────────────────
     chi_jj0 = chi_UV(Nk, tok_tilde, tok_tilde, pi_mn, pi_nm)
+    chi_jKj0 = chi_UV(Nk, tokK_tilde, tok_tilde, pi_mn, pi_nm)
     chi_jEj0 = chi_UV(Nk, tok_tilde, tok_tilde, piw_mn, piw_nm)
     chi_matj0 = chi_UV(Nk, mat_tilde, tok_tilde, pi_mn, pi_nm)
 
     # ── chi_jrho0 / chi_rhoj0 ──────────────────────────────────────────
     chi_jrho0 = np.zeros(Nop, dtype=np.complex128)
     chi_rhoj0 = np.zeros(Nop, dtype=np.complex128)
+    chi_jKrho0 = np.zeros(Nop, dtype=np.complex128)
     chi_jErho0 = np.zeros(Nop, dtype=np.complex128)
     chi_matrho0 = np.zeros(Nop, dtype=np.complex128)
     for i in range(Nop):
         chi_jrho0[i] = chi_UV(Nk, tok_tilde,    rhos_tilde[i], pi_mn, pi_nm)
         chi_rhoj0[i] = chi_UV(Nk, rhos_tilde[i], tok_tilde,    pi_mn, pi_nm)
+        chi_jKrho0[i] = chi_UV(Nk, tokK_tilde, rhos_tilde[i], pi_mn, pi_nm)
         chi_jErho0[i] = chi_UV(Nk, tok_tilde,    rhos_tilde[i], piw_mn, piw_nm)
         chi_matrho0[i] = chi_UV(Nk, mat_tilde, rhos_tilde[i], pi_mn, pi_nm)
 
@@ -1066,16 +1073,17 @@ def compute_single_om_fused(
     inv     = LA.inv(mat)
     chi_rpa = inv @ chi0
     dchi_jj = chi_jrho0 @ thetas_diag @ inv @ chi_rhoj0
+    dchi_jKj = chi_jKrho0 @ thetas_diag @ inv @ chi_rhoj0
     dchi_jEj = chi_jErho0 @ thetas_diag @ inv @ chi_rhoj0
     dchi_matj = chi_matrho0 @ thetas_diag @ inv @ chi_rhoj0
 
-    return om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jEj0, dchi_jEj, chi_matj0, dchi_matj, chi_rhoj0
+    return om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jKj0, dchi_jKj, chi_jEj0, dchi_jEj, chi_matj0, dchi_matj, chi_rhoj0
 
 ''' susceptibilities for an array of omegas '''
 def compute_chi(
     omegas,
     Nk, Gamma, mu_, invt, nodes, weights,
-    thetas, tok_tilde, mat_tilde,
+    thetas, tok_tilde, tokK_tilde, mat_tilde,
     energije,
     rhos_tilde,
     verbose=True,
@@ -1123,6 +1131,8 @@ def compute_chi(
     chi_rpa_arr   = np.zeros((N_om, Nop, Nop), dtype=np.complex128)
     chi_jj0_arr   = np.zeros(N_om,             dtype=np.complex128)
     dchi_jj_arr   = np.zeros(N_om,             dtype=np.complex128)
+    chi_jKj0_arr   = np.zeros(N_om,             dtype=np.complex128)
+    dchi_jKj_arr   = np.zeros(N_om,             dtype=np.complex128)
     chi_matj0_arr = np.zeros(N_om, dtype=np.complex128)
     chi_jEj0_arr = np.zeros(N_om, dtype=np.complex128)
     dchi_matj_arr = np.zeros(N_om, dtype=np.complex128)
@@ -1134,7 +1144,7 @@ def compute_chi(
         result = compute_single_om_fused(
             om,        # om = frequency value, omegas = full array
             Nk, Gamma, mu_, invt, nodes, weights,
-            thetas, tok_tilde, mat_tilde,
+            thetas, tok_tilde, tokK_tilde, mat_tilde,
             energije, rhos_tilde,
             eps=eps,
             include_hartree=include_hartree, include_phonon=include_phonon,
@@ -1151,12 +1161,14 @@ def compute_chi(
         #with tqdm(total=N_om, desc="omegas", disable=not verbose) as pbar:
         for future in as_completed(futures):
             om_idx, result = future.result()
-            om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jEj0, dchi_jEj, chi_matj0, dchi_matj, chi_rhoj0 = result
+            om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jKj0, dchi_jKj, chi_jEj0, dchi_jEj, chi_matj0, dchi_matj, chi_rhoj0 = result
 
             chi0_arr[om_idx]      = chi0
             chi_rpa_arr[om_idx]   = chi_rpa
             chi_jj0_arr[om_idx]   = chi_jj0
             dchi_jj_arr[om_idx]   = dchi_jj
+            chi_jKj0_arr[om_idx] = chi_jKj0
+            dchi_jKj_arr[om_idx] = dchi_jKj
             chi_jEj0_arr[om_idx] = chi_jEj0
             dchi_jEj_arr[om_idx] = dchi_jEj
             chi_matj0_arr[om_idx] = chi_matj0
@@ -1172,6 +1184,9 @@ def compute_chi(
 
                'chi_jj0' : chi_jj0_arr,
                'dchi_jj' : dchi_jj_arr,
+
+                'chi_jKj0' : chi_jKj0_arr,
+                'dchi_jKj' : dchi_jKj_arr,
 
                'chi_jEj0' : chi_jEj0_arr,
                'chi_matj0' : chi_matj0_arr,

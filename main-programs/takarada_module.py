@@ -335,6 +335,8 @@ class model:
         mat = m3 + m6 + m4a + m4b
         self.mat_tilde = tokovi.operator_tilde(mat, self.vecs)
         self.rhos_tilde = tokovi.operator_tilde(self.rhos, self.vecs)
+        currentK = tokovi.jK_tok(self.K, self.pos, self.kinetic, self.epsilon, self.epsilon_, self.mu)
+        self.currentK_tilde = tokovi.operator_tilde(currentK, self.vecs)
 
     def transport_functions(self, epsilons, Gamma, dict_form=None):
         spektralka = tokovi.Spektralka(epsilons, self.mu, self.energije, Gamma)
@@ -418,7 +420,7 @@ class model:
             mu_ = self.mu / Gamma
             invt = Gamma / self.T
             
-            results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers)
+            results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers)
             
             Chi_jj0 = - results['chi_jj0'].imag
             dChi_jj  = - results['dchi_jj'].imag
@@ -486,9 +488,9 @@ class model:
         mu_ = self.mu / Gamma
         invt = Gamma / self.T
         if not include_phonon:
-            results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps)
+            results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps)
         elif include_phonon:
-            results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps,
+            results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps,
                                              include_hartree=self.include_hartree, include_phonon=include_phonon,
                                              lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=self.Vb, Vc=self.Vc, Gamma_ph=Gamma_ph)
 
