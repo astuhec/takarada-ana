@@ -581,15 +581,17 @@ class model:
         if params["measure_provider"] == 'current':
             measure_provider = self.current
         elif params["measure_provider"] == 'kinetic_current':
-            currentK = tokovi.jK_tok(self.K, self.pos, self.kinetic, self.epsilon, self.epsilon_, self.mu)
+            currentK = tokovi.kinetic_current_provider(self.epsilon, self.epsilon_, self.mu, self.Vb, self.Vc, self.include_hartree)
             measure_provider = currentK
         elif params["measure_provider"] == 'curent_kinetic_current':
-            currentK = tokovi.jK_tok(self.K, self.pos, self.kinetic, self.epsilon, self.epsilon_, self.mu)
+            currentK = tokovi.kinetic_current_provider(self.epsilon, self.epsilon_, self.mu, self.Vb, self.Vc, self.include_hartree)
             measure_provider = [self.current, currentK]
         elif params["measure_provider"] == "current_interaction":
             measure_provider = [self.current, tokovi.compute_together_mf_matrices]
         elif params["measure_provider"] == 'all_three':
-            currentK = tokovi.jK_tok(self.K, self.pos, self.kinetic, self.epsilon, self.epsilon_, self.mu)
+            currentK = tokovi.kinetic_current_provider(self.epsilon, self.epsilon_, self.mu, self.Vb, self.Vc, self.include_hartree)
+            # Measurement rows: current, kinetic current, interaction current.
+            # Keep the two dynamic providers in this order.
             measure_provider = [self.current, currentK, tokovi.compute_together_mf_matrices]
         else:
             print("Choose a valid measure provider." \
