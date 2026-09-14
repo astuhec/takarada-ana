@@ -196,7 +196,28 @@ def fd(eps, mu, T):
     return 1.0 / (np.exp((eps - mu) / T) + 1.0)
 
 ''' diagonalization of the hamiltonian '''
-def H_diagonalize(hamiltonian, K, T, mu):
+def zero_T_filling(energije, n_target):
+    """Fill the lowest states, sharing partial filling across degenerate states."""
+    if not np.isfinite(n_target) or not 0 < n_target < 2:
+        raise ValueError("n_target must be strictly between 0 and 2")
+    levels = np.sort(energije.ravel())
+    count = n_target * energije.shape[-1]
+    nearest = round(count)
+    if abs(count - nearest) < 1e-12:
+        count = float(nearest)
+    index = min(max(int(np.ceil(count)) - 1, 0), len(levels) - 1)
+    fermi = levels[index]
+    tied = np.isclose(energije, fermi, rtol=0, atol=1e-12)
+    below = (energije < fermi) & ~tied
+    occupations = below.astype(float)
+    fraction = (count - np.count_nonzero(below)) / np.count_nonzero(tied)
+    occupations[tied] = fraction
+    above = energije[(energije > fermi) & ~tied]
+    mu = 0.5 * (fermi + above.min()) if fraction == 1.0 and above.size else fermi
+    return occupations, mu
+
+
+def H_diagonalize(hamiltonian, K, T, mu, n_target=1.0):
     Nk = len(K)
 
     # ── batch diagonalize unique k-points: i = 0, 1, ..., Nk//2 ──────
@@ -222,8 +243,14 @@ def H_diagonalize(hamiltonian, K, T, mu):
     fs = np.zeros((2, 2, Nk))
 
     if T == 0:
-        fs[0, 0, :] = 1.0
-        fs[1, 1, :] = 0.0
+        if n_target == 1.0:
+            # Preserve the original half-filled ground-state convention.
+            fs[0, 0, :] = 1.0
+            fs[1, 1, :] = 0.0
+        else:
+            occupations, _ = zero_T_filling(energije, n_target)
+            fs[0, 0, :] = occupations[0]
+            fs[1, 1, :] = occupations[1]
     else:
         fs[0, 0, :] = fd(energije[0, :], mu, T)
         fs[1, 1, :] = fd(energije[1, :], mu, T)
@@ -231,8 +258,8 @@ def H_diagonalize(hamiltonian, K, T, mu):
     return energije, vecs, fs
 
 ''' a single iteration in the self-consistency equation. rho --> rho_new  '''
-def F(hamiltonian, rho, K, T, mu):
-    _, vecs, fs = H_diagonalize(hamiltonian, K, T, mu)
+def F(hamiltonian, rho, K, T, mu, n_target=1.0):
+    _, vecs, fs = H_diagonalize(hamiltonian, K, T, mu, n_target=n_target)
     rho_new = np.einsum('ijk,jmk,mnk->ink', vecs, fs, np.swapaxes(vecs.conj(),0,1))
     return rho_new, np.max(np.abs(rho - rho_new))
 
@@ -242,19 +269,19 @@ def zasedenost(rho):
 
 ''' various functions for converging the self-consistnecy equation '''
 def Rho_next(hk0, rho, K, T, mu, Vb, Vc, eps0,
-             epsilon_threshold, N_epsilon, maxiter, include_hartree, mix=0.5, mazza=None):
+             epsilon_threshold, N_epsilon, maxiter, include_hartree, mix=0.5, mazza=None, n_target=1.0):
     err, N_iters = 1.0, 0
     while err > epsilon_threshold and N_iters < maxiter:
         eps = eps0 if N_iters < N_epsilon else 0.0
-        rho_new, err = F(h_k(K, hk0, rho, Vb, Vc, eps, include_hartree, mazza), rho, K, T, mu)
+        rho_new, err = F(h_k(K, hk0, rho, Vb, Vc, eps, include_hartree, mazza), rho, K, T, mu, n_target=n_target)
         rho = rho_new * mix + rho * (1 - mix)
         N_iters += 1
-    rho, _ = F(h_k(K, hk0, rho, Vb, Vc, 0., include_hartree, mazza), rho, K, T, mu)
-    energije, vecs, fs = H_diagonalize(h_k(K, hk0, rho, Vb, Vc, 0., include_hartree, mazza), K, T, mu)
+    rho, _ = F(h_k(K, hk0, rho, Vb, Vc, 0., include_hartree, mazza), rho, K, T, mu, n_target=n_target)
+    energije, vecs, fs = H_diagonalize(h_k(K, hk0, rho, Vb, Vc, 0., include_hartree, mazza), K, T, mu, n_target=n_target)
     n = zasedenost(rho)
     return rho, err, energije, vecs, fs, n
 
-''' functions for determining chemical potential for half-filling '''
+''' functions for determining chemical potential at the target filling '''
 def f_newmu(mu, hk0, rho, K, T, Vb, Vc, eps0,
             epsilon_threshold, N_epsilon, maxiter, include_hartree, mix=0.50, n_target=1.0):
     _, _, _, _, _, n = Rho_next(hk0, rho, K, T, mu, Vb, Vc, eps0, epsilon_threshold, N_epsilon, maxiter, include_hartree, mix)
@@ -262,12 +289,12 @@ def f_newmu(mu, hk0, rho, K, T, Vb, Vc, eps0,
 
 def find_bracket(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
                  epsilon_threshold, N_epsilon, maxiter, include_hartree, mix,
-                 max_expand=20, expand_factor=2.0):
+                 max_expand=20, expand_factor=2.0, n_target=1.0):
     """
     Expand [mu1, mu2] outward until f(mu1) and f(mu2) have opposite signs.
     """
     args = (hk0, rho, K, T, Vb, Vc, eps0,
-            epsilon_threshold, N_epsilon, maxiter, include_hartree, mix)
+            epsilon_threshold, N_epsilon, maxiter, include_hartree, mix, n_target)
     
     f1 = f_newmu(mu1, *args)
     f2 = f_newmu(mu2, *args)
@@ -276,7 +303,7 @@ def find_bracket(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
     half_width = (mu2 - mu1) / 2.0
 
     for i in range(max_expand):
-        if f1 * f2 < 0:
+        if f1 * f2 < 0 or (n_target != 1.0 and (f1 == 0 or f2 == 0)):
             return mu1, mu2  # valid bracket found
         
         # Expand symmetrically
@@ -368,10 +395,14 @@ def NewMu(rho, K, hk0, Vb, Vc, T, mu, dmu, maxiter, epsilon_threshold, eps_last,
 
 def NewMu2(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
              epsilon_threshold, N_epsilon, maxiter, include_hartree, mix=0.5, xtol=1e-4, rtol=1e-4, maxiterbrentq=50, n_target=1.0):
+    if not np.isfinite(n_target) or not 0 < n_target < 2:
+        raise ValueError("n_target must be strictly between 0 and 2")
+    if T <= 0:
+        raise ValueError("NewMu2 requires T > 0; use fixed-filling Rho_next for T == 0")
     # Auto-fix bracket if needed
     try:
         mu1, mu2 = find_bracket(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
-                                epsilon_threshold, N_epsilon, maxiter, include_hartree, mix)
+                                epsilon_threshold, N_epsilon, maxiter, include_hartree, mix, n_target=n_target)
     except ValueError as e:
         print(f"Warning: {e}")
         raise

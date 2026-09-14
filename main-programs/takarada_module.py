@@ -68,7 +68,9 @@ class model:
 
         self.mu = config.get("mu0")
         self.include_hartree = config.get("include_hartree")
-        self.n_target = config.get("n_target")
+        self.n_target = config.get("n_target", 1.0)
+        if not np.isfinite(self.n_target) or not 0 < self.n_target < 2:
+            raise ValueError("n_target must be strictly between 0 and 2")
         
         self.b = self.phys_parameters["b"]
         self.t = self.phys_parameters["t"]
@@ -128,6 +130,7 @@ class model:
 
         self.L11 = []
         self.L12 = []
+        self.L12K = []
         self.L22 = []
         self.L12q = []
         self.L22q = []
@@ -140,13 +143,15 @@ class model:
         self.L11_corr = []
         self.L12_0 = []
         self.L12_corr = []
+        self.L12K_0 = []
+        self.L12K_corr = []
         self.L12q_0 = []
         self.L12q_corr = []
 
     def GS(self):
         rho0 = helpers.rho0(self.Nk)
         rho, err, energije, vecs, fs, n = helpers.Rho_next(self.hk0, rho0, self.K, 0, self.mu, self.Vb, self.Vc, self.eps0,
-                                                  self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, mix=0.5, mazza=self.mazza)
+                                                  self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, mix=0.5, mazza=self.mazza, n_target=self.n_target)
         self.rho = rho
         self.energije = energije
         self.vecs = vecs
@@ -155,6 +160,8 @@ class model:
         self.delta_b, self.delta_c = helpers.Delta(self.K, self.rho, self.Vb, self.Vc)
         self.gap = np.min(self.energije[1]) - np.max(self.energije[0])
         self.mu = 0.5 * (np.min(self.energije[1]) + np.max(self.energije[0]))
+        if self.n_target != 1.0:
+            _, self.mu = helpers.zero_T_filling(self.energije, self.n_target)
         self.mu_GS = self.mu
 
         self.rho_GS = self.rho
@@ -169,7 +176,7 @@ class model:
 
             mu, rho, err, energije, vecs, _, n = helpers.NewMu2(self.mu - self.dmu, self.mu + self.dmu, self.hk0, self.rho, self.K, self.T, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, mix=0.5, xtol=self.n_pass, rtol=self.n_pass, maxiterbrentq=maxbrentq, n_target=self.n_target)
         else:
-            rho, err, energije, vecs, _, n = helpers.Rho_next(self.hk0, self.rho, self.K, self.T, mu_initial, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree)
+            rho, err, energije, vecs, _, n = helpers.Rho_next(self.hk0, self.rho, self.K, self.T, mu_initial, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, mix=0.5, xtol=self.n_pass, rtol=self.n_pass, maxiterbrentq=maxbrentq, n_target=self.n_target)
             mu = mu_initial
 
         self.rho = rho
@@ -252,11 +259,18 @@ class model:
                 self.errors.append(self.err)
                 self.occupations.append(self.n)
 
-                n0, n1 = helpers.Ns(self.rho, self.energy_infty, self.delta_b, self.delta_c, self.Vb, self.Vc, eps_ns, self.T, self.mu)
+                if self.n_target == 1.0:
+                    n0, n1 = helpers.Ns(self.rho, self.energy_infty, self.delta_b, self.delta_c, self.Vb, self.Vc, eps_ns, self.T, self.mu)
+                else:
+                    n0 = np.mean(self.rho[0, 0]).real
+                    n1 = np.mean(self.rho[1, 1]).real
                 self.ns0.append(n0)
                 self.ns1.append(n1)
 
                 self.gap = helpers.Gap(self.energije, self.delta_bs[-1], self.delta_cs[-1], self.Vb, self.Vc, eps_ns, self.gap_infty)
+                if self.n_target != 1.0:
+                    # Report the current band separation, not the reference GS gap.
+                    self.gap = np.min(self.energije[1]) - np.max(self.energije[0])
                 self.gaps.append(self.gap)
 
                 energy = helpers.energy_average(self.K, self.rho, self.phys_parameters, self.energije, self.mu, self.T)
@@ -280,7 +294,7 @@ class model:
                     self.err = err_save
                     self.n = n_save
 
-            msg = f'Progress {np.round(i/len(betas), 3)}. beta={np.round(1/self.T, 1)}, n={np.round(self.n)}, delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}'
+            msg = f'Progress {np.round(i/len(betas), 3)}. beta={np.round(1/self.T, 1)}, n={self.n:.6f} (target={self.n_target:g}), delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}'
             print(msg, flush=True)
 
     ''' this is to get lowT dependnece, with the knowledge of mu(T)=(e_c+e_v)/2 + k*T
@@ -292,6 +306,18 @@ class model:
 
         Nbeta_correction = self.config.get("Nbeta_correction")
         scale_correction = 1/self.config.get("scale")
+        if self.n_target != 1.0:
+            # Doped systems need a fresh fixed-filling solve at each temperature.
+            stable_index = (int(np.argmin(np.abs(np.array(self.Ts) - T_stable)))
+                            if T_stable is not None else int(np.argmin(self.Ts)))
+            self.mu = self.mus[stable_index]
+            self.rho = self.rho_GS.copy()
+            count = len(self.Ts)
+            self.run_Tdependence(beta=1/self.Ts[stable_index],
+                                 Nbeta=Nbeta_correction, scale=scale_correction)
+            self.stable_index = stable_index
+            self.Ncorrection = len(self.Ts) - count
+            return
         stable_index = np.argmin(np.abs(np.array(self.Ts) - T_stable))  if T_stable is not None else helpers.is_stable(self.Ts, self.mus, threshold, window) + safety
 
         # find interval above T_stable where mu(T) is linear. this will serve as approximation for mu(T) at T < T_stable
@@ -335,34 +361,39 @@ class model:
         mat = m3 + m6 + m4a + m4b
         self.mat_tilde = tokovi.operator_tilde(mat, self.vecs)
         self.rhos_tilde = tokovi.operator_tilde(self.rhos, self.vecs)
-        currentK = tokovi.jK_tok(self.K, self.pos, self.kinetic, self.epsilon, self.epsilon_, self.mu)
-        self.currentK_tilde = tokovi.operator_tilde(currentK, self.vecs)
+        hartree_shift0 = (self.Vb + self.Vc) * np.sum(self.rho[1,1]).real / self.Nk
+        hartree_shift1 = (self.Vb + self.Vc) * np.sum(self.rho[0,0]).real / self.Nk
+        self.currentK = tokovi.jK_tok(self.K, self.pos, self.kinetic, self.epsilon, self.epsilon_, self.mu, hartree_shift0, hartree_shift1)
+        self.currentK_tilde = tokovi.operator_tilde(self.currentK, self.vecs)
 
     def transport_functions(self, epsilons, Gamma, dict_form=None):
         spektralka = tokovi.Spektralka(epsilons, self.mu, self.energije, Gamma)
         phi = tokovi.phi_Kubo(self.K, self.current_tilde, self.current_tilde, spektralka, epsilons)
         phiQ = tokovi.phi_Kubo(self.K, self.mat_tilde, self.current_tilde, spektralka, epsilons)
+        phiK = tokovi.phi_Kubo(self.K, self.current_tilde, self.currentK_tilde, spektralka, epsilons)
         phiQ2 = tokovi.phi_Kubo(self.K, self.mat_tilde, self.mat_tilde, spektralka, epsilons)
         if dict_form == None:
-            return phi, phiQ, phiQ2
+            return phi, phiQ, phiK, phiQ2
         elif dict_form:
             phi_boltz = tokovi.phi_Boltzmann(self.K, self.energije, self.mu, epsilons)
             results = {'phi' : phi,
                        'phiQ' : phiQ,
+                       'phiK' : phiK,
                        'epsilons' : epsilons,
                        'phi_Boltz' : phi_boltz}
             return results
 
     def ls_Kubo(self, epsilons, Gamma, mfd1):
-        phi, phiQ, phiQ2 = self.transport_functions(epsilons, Gamma)
+        phi, phiQ, phiK, phiQ2 = self.transport_functions(epsilons, Gamma)
 
         l11 = np.pi * tokovi.integral_omega(phi * mfd1, epsilons)
         l12 = np.pi * tokovi.integral_omega(epsilons * phi * mfd1, epsilons)
+        l12K = np.pi * tokovi.integral_omega(phiK * mfd1, epsilons)
         l22 = np.pi * tokovi.integral_omega(epsilons**2 * phi * mfd1, epsilons)
         l12q = np.pi * tokovi.integral_omega(phiQ * mfd1, epsilons)
         l22q = np.pi * tokovi.integral_omega(phiQ2 * mfd1, epsilons) + 2 * np.pi * tokovi.integral_omega(phiQ * epsilons * mfd1, epsilons)        
 
-        return l11, l12, l22, l12q, l22q
+        return l11, l12, l12K, l22, l12q, l22q
 
     def DC_coefficients(self, eps, Nomega, Gammas):
         epsilon_max = np.sqrt(np.abs(np.arccosh(1/(eps*4*self.T))) * 2 * self.T)
@@ -375,6 +406,7 @@ class model:
 
         l11 = np.zeros(Ngamma)
         l12 = np.zeros(Ngamma)
+        l12K = np.zeros(Ngamma)
         l22 = np.zeros(Ngamma)
         l12q = np.zeros(Ngamma)
         l22q = np.zeros(Ngamma)
@@ -384,10 +416,11 @@ class model:
         l12_boltz = np.zeros(Ngamma)
 
         for g, Gamma in enumerate(Gammas):
-            l11_, l12_, l22_, l12q_, l22q_ = self.ls_Kubo(epsilons, Gamma, mfd1)
+            l11_, l12_, l12K_, l22_, l12q_, l22q_ = self.ls_Kubo(epsilons, Gamma, mfd1)
             l11[g] = l11_.real
-            l22[g] = l22_.real
             l12[g] = l12_.real
+            l12K[g] = l12K_.real
+            l22[g] = l22_.real
             l12q[g] = l12q_.real
             l22q[g] = l22q_.real
 
@@ -397,6 +430,7 @@ class model:
 
         self.L11.append(helpers.to_scalar_if_single(l11))
         self.L12.append(helpers.to_scalar_if_single(l12))
+        self.L12K.append(helpers.to_scalar_if_single(l12K))
         self.L22.append(helpers.to_scalar_if_single(l22))
         self.L12q.append(helpers.to_scalar_if_single(l12q))
         self.L22q.append(helpers.to_scalar_if_single(l22q))
@@ -410,10 +444,12 @@ class model:
 
         l11_0 = np.zeros(Ngamma)
         l12_0 = np.zeros_like(l11_0)
+        l12K_0 = np.zeros_like(l11_0)
         l12q_0 = np.zeros_like(l11_0)
 
         l11 = np.zeros_like(l11_0)
         l12 = np.zeros_like(l11_0)
+        l12K = np.zeros_like(l11_0)
         l12q = np.zeros_like(l11_0)
 
         for g, Gamma in enumerate(Gammas):
@@ -435,15 +471,19 @@ class model:
             l12_0[g] = tokovi.find_DC_limit(omega0, Chi_jEj0)
             l12[g] = tokovi.find_DC_limit(omega0, Chi_jEj)
 
+            Chi_jKj0 = - results['chi_jKj0'].imag
+            dChi_jKj = - results['dchi_jKj'].imag
+            Chi_jKj = Chi_jKj0 + dChi_jKj
+            l12K_0[g] = tokovi.find_DC_limit(omega0, Chi_jKj0)
+            l12K[g] = tokovi.find_DC_limit(omega0, Chi_jKj)
+            
             Chi_matj0 = - results['chi_matj0'].imag
             dChi_matj = - results['dchi_matj'].imag
             Chi_matj = Chi_matj0 + dChi_matj
-            
             if np.max(np.abs(Chi_matj0)) < 1e-14:
                 l12q_0[g] = 0.0
             else:
                 l12q_0[g] = tokovi.find_DC_limit(omega0, Chi_matj0)
-
             if np.max(np.abs(Chi_matj)) < 1e-14:
                 l12q[g] = 0.0
             else:
@@ -451,8 +491,13 @@ class model:
 
         self.L11_0.append(helpers.to_scalar_if_single(l11_0))
         self.L11_corr.append(helpers.to_scalar_if_single(l11))
+
         self.L12_0.append(helpers.to_scalar_if_single(l12_0))
         self.L12_corr.append(helpers.to_scalar_if_single(l12))
+
+        self.L12K_0.append(helpers.to_scalar_if_single(l12K_0))
+        self.L12K_corr.append(helpers.to_scalar_if_single(l12K))
+
         self.L12q_0.append(helpers.to_scalar_if_single(l12q_0))
         self.L12q_corr.append(helpers.to_scalar_if_single(l12q))
 
@@ -598,6 +643,7 @@ class model:
             if evaluate_transport_DC:
                 data["L11"] = self.merge(self.L11)
                 data["L12"] = self.merge(self.L12)
+                data["L12K"] = self.merge(self.L12K)
                 data["L22"] = self.merge(self.L22)
                 data["L12q"] = self.merge(self.L12q)
                 data["L22q"] = self.merge(self.L22q)
@@ -610,6 +656,8 @@ class model:
                 data["L11_corr"] = self.merge(self.L11_corr)
                 data["L12_0"] = self.merge(self.L12_0)
                 data["L12_corr"] = self.merge(self.L12_corr)
+                data["L12K_0"] = self.merge(self.L12K_0)
+                data["L12K_corr"] = self.merge(self.L12K_corr)
                 data["L12q_0"] = self.merge(self.L12q_0)
                 data["L12q_corr"] = self.merge(self.L12q_corr)
         else:
@@ -630,6 +678,7 @@ class model:
             if evaluate_transport_DC:
                 data["L11"] = self.L11
                 data["L12"] = self.L12
+                data["L12K"] = self.L12K
                 data["L22"] = self.L22
                 data["L12q"] = self.L12q
                 data["L22q"] = self.L22q
@@ -642,6 +691,8 @@ class model:
                 data["L11_corr"] = self.L11_corr
                 data["L12_0"] = self.L12_0
                 data["L12_corr"] = self.L12_corr
+                data["L12K_0"] = self.L12K_0
+                data["L12K_corr"] = self.L12K_corr
                 data["L12q_0"] = self.L12q_0
                 data["L12q_corr"] = self.L12q_corr
             

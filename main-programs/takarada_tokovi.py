@@ -21,14 +21,14 @@ def j_tok(K, pos, kinetic):
 
 ''' kinetic energy current operator '''
 @njit(cache=True)
-def jK_tok(K, pos, kinetic, epsilon, epsilon_, mu):
+def jK_tok(K, pos, kinetic, epsilon, epsilon_, mu, hartree_shift0, hartree_shift1):
     # Keep hopping and onsite terms in one homogeneous array for Numba.
     kinetic_full = np.zeros((len(kinetic) + 2, 4), dtype=np.float64)
     kinetic_full[:len(kinetic)] = kinetic
-    kinetic_full[-2, 3] = epsilon - mu
+    kinetic_full[-2, 3] = -epsilon - mu + hartree_shift0
     kinetic_full[-1, 1] = 1.0
     kinetic_full[-1, 2] = 1.0
-    kinetic_full[-1, 3] = epsilon_ - mu
+    kinetic_full[-1, 3] = epsilon_ - mu + hartree_shift1
     Nk = len(K)
     jK = np.zeros((2, 2, Nk), dtype=np.complex128)
     for line in kinetic_full:
