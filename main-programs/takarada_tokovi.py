@@ -415,6 +415,17 @@ def operator_tilde(op_bare, vecs):
         op_tilde = np.einsum('jix, jlx, lmx -> imx', vecs.conj(), op_bare, vecs)
     return op_tilde
 
+''' operator in orbital basis obtained from operator in band basis '''
+def operator_bare(op_tilde, vecs):
+    op_bare = np.empty_like(op_tilde, dtype=np.complex128)
+    if len(op_tilde.shape) > 3:
+        n_ops = op_tilde.shape[0]
+        for n in range(n_ops):
+            op_bare[n] = np.einsum('jix,imx,lmx->jlx', vecs, op_tilde[n], vecs.conj())
+    else:
+        op_bare = np.einsum('jix,imx,lmx->jlx',vecs, op_tilde, vecs.conj())
+    return op_bare
+
 ''' df/domega, f is Fermi-Dirac distribution function '''
 @njit(cache=True)
 def fd_1(eps_or_omega, T, mu=0.0):
@@ -572,6 +583,13 @@ def relax_rho(rho, rho_eq, dt, Gamma):
     decay = np.exp(-Gamma * dt)
     return rho_eq + decay * (rho - rho_eq)
 
+def dephase_rho(rho, vecs, dt, Gamma):
+    rho_band = operator_tilde(rho, vecs)
+    decay = np.exp(-Gamma*dt)
+    rho_band[0,1,:] *= decay
+    rho_band[1,0,:] *= decay
+    return operator_bare(rho_band, vecs)
+
 ''' expectation value of measure_operators when system is described by density matrix rho'''
 @njit(parallel=True)
 def measure(Nk, Nop, measure_operators, rho):
@@ -586,7 +604,7 @@ def measure(Nk, Nop, measure_operators, rho):
                 rho[1,1,j]*measure_operators[n,1,1,j]
             )
     measurements = measurements_k.sum(axis=1)
-    return measurements
+    return measurements, measurements_k
 
 @njit(parallel=True)
 def norm(rho):
@@ -626,13 +644,12 @@ def compile_measure_provider(measure_provider):
 
     return static_ops, dynamic_providers
 
-def simulate_pulz(K, hk0, rho, Vb, Vc, include_hartree,
+def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
                   perturbation_operator, measure_provider,
                   A0, t0, sigma, Omega, dt, t_max,
                   do_freeze, Ncorr, tol, geom, phases, g_ffts, Gamma=0.0, verbose=True, freq_verbose=50):
     N_points = int(t_max/dt)
     Nk = len(K)
-    rho_eq = np.copy(rho)
 
     static_ops, dynamic_providers = compile_measure_provider(measure_provider)
 
@@ -667,79 +684,82 @@ def simulate_pulz(K, hk0, rho, Vb, Vc, include_hartree,
     H0 = h_k(K, hk0, rho0, Vb, Vc, 0.0, include_hartree)
 
     rho_expvals = np.zeros((Nop, N_points), dtype=np.complex128)
+    rho_expvals_k = np.zeros((Nop, N_points, Nk), dtype=np.complex128)
     rho_norms = np.zeros(N_points)
     Delta_bs = np.zeros(N_points, dtype=np.complex128)
     Delta_cs = np.zeros(N_points, dtype=np.complex128)
     ns0 = np.zeros(N_points)
     ns1 = np.zeros(N_points)
 
-    ts = dt * np.arange(N_points)
+    ts = dt * (np.arange(N_points) + 1)
 
     for i in range(N_points):
 
+        ''' dynamics of rho:
+            \partial_t \rho = -i[H[\rhorho] -  A(t)*P, \rho] + D[rho]
+                               ---- Hamiltonian substep ---   ---- dissipator ---
+        '''
         if verbose and i % freq_verbose == 0:
             msg = f'Progress: {i/N_points}'
             print('\r' + msg + ' ' * (80 - len(msg)), end='', flush=True)
 
-        A_t = A_pulz(i * dt, A0, t0, sigma, Omega)
-        A_half = A_pulz(i * dt + dt/2, A0, t0, sigma, Omega)
+        t = i*dt
+        A_t = A_pulz(t, A0, t0, sigma, Omega)
+        A_half = A_pulz(t + dt/2, A0, t0, sigma, Omega)
 
-        # Hamiltonian at current density
+        ''' 1. first dissipative half-step '''
+        if Gamma != 0.0:
+            rho_a = dephase_rho(rho, vecs, dt/2, Gamma)
+        else:
+            rho_a = rho
+
+        ''' 2. Hamiltonian at START of the Hamiltonian substep '''
         if do_freeze:
             H_k0 = H0
         else:
-            H_k0 = h_k(K, hk0, rho, Vb, Vc, 0., include_hartree)
-        # ------------------
-        # Predictor
-        # ------------------
+            H_k0 = h_k(K, hk0, rho_a, Vb, Vc, 0., include_hartree)
 
-        if Gamma != 0.0:
-            rho_half = relax_rho(rho, rho_eq, dt/2, Gamma)
-            rho_pred = evolve_rho_kernel(H_k0 - A_t * perturbation_operator, rho_half, dt)
-            rho_pred = relax_rho(rho_pred, rho_eq, dt/2, Gamma)
-        else:
-            rho_pred = evolve_rho_kernel(H_k0 - A_t * perturbation_operator, rho, dt)
+        ''' 3. predictor '''
+        rho_pred = evolve_rho_kernel(H_k0 - A_t*perturbation_operator, rho_a, dt)
 
         if do_freeze:
             H_k1 = H0
         else:
-            H_k1 = h_k(K, hk0, rho_pred, Vb, Vc, 0., include_hartree)
+            H_k1 = h_k(K, hk0, rho_pred, Vb, Vc, 0.0, include_hartree)
 
         rho_guess = rho_pred
 
-        # ------------------
-        # Corrector iteration
-        # ------------------
+        ''' 4. corrector iteration: Hamiltonian substep only '''
 
         for _ in range(Ncorr):
 
-            H_mid = 0.5 * (H_k0 + H_k1) - A_half * perturbation_operator
+            H_mid = 0.5 * (H_k0 + H_k1) - A_half*perturbation_operator
 
-            if Gamma != 0.0:
-                rho_half = relax_rho(rho, rho_eq, dt/2, Gamma)
-                rho_new = evolve_rho_kernel(H_mid, rho_half, dt)
-                rho_new = relax_rho(rho_new, rho_eq, dt/2, Gamma)
-            else:
-                rho_new = evolve_rho_kernel(H_mid, rho, dt)
+            rho_new = evolve_rho_kernel(H_mid, rho_a, dt)
 
             err = np.max(np.abs(rho_new - rho_guess))
+
             rho_guess = rho_new
 
             if err < tol:
                 break
 
             if not do_freeze:
-                H_k1 = h_k(K, hk0, rho_guess, Vb, Vc, 0., include_hartree)
+                H_k1 = h_k(K, hk0, rho_guess, Vb, Vc, 0.0, include_hartree)
 
-        rho = rho_guess
+        # endpoint of the Hamiltonian tdhf substep
+        rho_b = rho_guess
 
-        # ------------------
-        # Measurements
-        # ------------------
+        ''' 5. final dissipative half-step'''
+        if Gamma != 0.0:
+            rho = dephase_rho(rho_b, vecs, dt/2, Gamma)
+        else:
+            rho = rho_b
 
+
+        ''' 6. measurements '''
         if do_freeze:
             measure_operators = measure_operators_fixed
-
         else:
             ops_list = []
 
@@ -754,14 +774,15 @@ def simulate_pulz(K, hk0, rho, Vb, Vc, include_hartree,
 
             measure_operators = np.concatenate(ops_list, axis=0)
 
-        measurement_t = measure(Nk, Nop, measure_operators, rho)
+        measurement_t, measurement_t_k = measure(Nk, Nop, measure_operators, rho)
         rho_expvals[:,i] = measurement_t
+        rho_expvals_k[:,i,:] = measurement_t_k
         rho_norms[i] = norm(rho)
         Delta_bs[i], Delta_cs[i] = Delta(K, rho, Vb, Vc)
         ns0[i] = np.sum(rho[0,0]).real / Nk
         ns1[i] = np.sum(rho[1,1]).real / Nk
         
-    return ts, rho_expvals, rho_norms, Delta_bs, Delta_cs, ns0, ns1
+    return ts, rho_expvals, rho_expvals_k, rho_norms, Delta_bs, Delta_cs, ns0, ns1
 
 ''' susceptibility obtained from temporal response, using Fourier transform. window exp(-eta*t) is applied '''
 def susceptibility(time, signal, probe, eta, omega_cut, Nk):

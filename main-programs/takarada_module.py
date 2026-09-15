@@ -176,7 +176,7 @@ class model:
 
             mu, rho, err, energije, vecs, _, n = helpers.NewMu2(self.mu - self.dmu, self.mu + self.dmu, self.hk0, self.rho, self.K, self.T, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, mix=0.5, xtol=self.n_pass, rtol=self.n_pass, maxiterbrentq=maxbrentq, n_target=self.n_target)
         else:
-            rho, err, energije, vecs, _, n = helpers.Rho_next(self.hk0, self.rho, self.K, self.T, mu_initial, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, mix=0.5, xtol=self.n_pass, rtol=self.n_pass, maxiterbrentq=maxbrentq, n_target=self.n_target)
+            rho, err, energije, vecs, _, n = helpers.Rho_next(self.hk0, self.rho, self.K, self.T, mu_initial, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, mix=0.5, n_target=self.n_target)
             mu = mu_initial
 
         self.rho = rho
@@ -597,7 +597,7 @@ class model:
             print("Choose a valid measure provider." \
             "Currently available : current, kinetic_current, curent_kinetic_current, current_interaction, all_three", flush=True)
 
-        times, measurement, norma, delta_bs, delta_cs, ns0, ns1 = tokovi.simulate_pulz(self.K, self.hk0, self.rho, self.Vb, self.Vc, self.include_hartree,
+        times, measurement, measurement_k, norma, delta_bs, delta_cs, ns0, ns1 = tokovi.simulate_pulz(self.K, self.hk0, self.rho, self.vecs, self.Vb, self.Vc, self.include_hartree,
                                                                                        perturbation_operator, measure_provider,
                                                                                        A0, t0, sigma, Omega0, dt, t_max,
                                                                                        do_freeze, Ncorr, tol, self.geom, self.phases, self.g_ffts, Gamma=Gamma_, verbose=verbose, freq_verbose=freq_verbose)
@@ -605,6 +605,7 @@ class model:
         pulz = tokovi.A_pulz(times, A0, t0, sigma, Omega0)
         results = {"time" : times,
                    "measurement" : measurement,
+                   "measurement_k" : measurement_k,
                    "pulz" : pulz,
                    "norma" : norma,
                    "delta_bs" : delta_bs,
@@ -618,7 +619,7 @@ class model:
         results["omegas"] = omegas
         results["Re_sigma"] = Re_sigma
         print('\n' + 'Finished simulation of perturbation.', flush=True)
-        return results        
+        return results
 
     def merge(self, arr):
         arr1 = arr[self.stable_index:-self.Ncorrection]
