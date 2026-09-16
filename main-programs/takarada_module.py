@@ -327,11 +327,27 @@ class model:
             window0 -= 5
         ind_start = np.argmin(np.abs(np.array(self.Ts) - T_start))
         ind_end = np.argmin(np.abs(np.array(self.Ts) - T_end))
-        k, n = np.polyfit(np.array(self.Ts)[ind_start:ind_end], np.array(self.mus)[ind_start:ind_end], 1)
-
-        self.coefficients = (k,n)
+        fit_T = np.asarray(self.Ts[ind_start:ind_end + 1])
+        fit_mu = np.asarray(self.mus[ind_start:ind_end + 1])
+        if (len(fit_T) < 2 or np.any(fit_T <= 0)
+                or not np.all(np.isfinite(fit_T))
+                or not np.all(np.isfinite(fit_mu))):
+            raise ValueError("Low-T fitting interval needs at least two finite, positive-temperature samples")
+        # Fit mu(T) = mu_GS + k*T with the known intercept fixed.
         n = self.mu_GS
-        k = (self.mus[stable_index] - self.mu_GS) / self.Ts[stable_index]
+        k = np.dot(fit_T, fit_mu - n) / np.dot(fit_T, fit_T)
+        residual = np.max(np.abs(fit_mu - (n + k * fit_T)))
+        join_error = abs(self.mus[stable_index] - (n + k * self.Ts[stable_index]))
+        if max(residual, join_error) > threshold * np.min(fit_T):
+            print(
+                f"Low-T linear approximation exceeds tolerance "
+                f"(fit residual={residual:.3g}, join error={join_error:.3g}). "
+                "Using the stable fixed-filling solver for the low-T extension.",
+                flush=True)
+            k, n = None, None
+            self.coefficients = None
+        else:
+            self.coefficients = (k, n)
         
         beta_initial = 1/self.Ts[stable_index]
         mu_initial = self.mus[stable_index]
@@ -502,7 +518,7 @@ class model:
         self.L12q_corr.append(helpers.to_scalar_if_single(l12q))
 
     def optical_response(self, Gamma=None,
-                         include_phonon=False, lam_b=None, om_b=None, lam_c=None, om_c=None, Gamma_ph=None):
+                         include_phonon=False, lam_b=None, om_b=None, lam_c=None, om_c=None, Gamma_ph=None, faktor=1.0):
         print('\n' + '-' * 80 + '\n' + \
               'Started calculation of RPA responses.', flush=True)
         params = self.config.get("params_RPA")
@@ -533,11 +549,11 @@ class model:
         mu_ = self.mu / Gamma
         invt = Gamma / self.T
         if not include_phonon:
-            results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps)
+            results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps, faktor=faktor)
         elif include_phonon:
             results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps,
                                              include_hartree=self.include_hartree, include_phonon=include_phonon,
-                                             lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=self.Vb, Vc=self.Vc, Gamma_ph=Gamma_ph)
+                                             lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=self.Vb, Vc=self.Vc, Gamma_ph=Gamma_ph,faktor=faktor)
 
         results["Gamma"] = Gamma
         results["T"] = self.T
@@ -623,7 +639,7 @@ class model:
 
     def merge(self, arr):
         arr1 = arr[self.stable_index:-self.Ncorrection]
-        arr2 = arr[-self.Ncorrection+1:][::-1]
+        arr2 = arr[-self.Ncorrection:][::-1]
         arr = np.concatenate([arr2, arr1], axis=0)
         return arr
 

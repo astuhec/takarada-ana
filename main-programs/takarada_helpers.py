@@ -2,6 +2,7 @@ import numpy as np
 import scipy.linalg as LA
 from numba import njit, prange
 from scipy.optimize import brentq
+from scipy.special import logsumexp
 from scipy.linalg import expm
 from tqdm import tqdm
 import time
@@ -284,7 +285,16 @@ def Rho_next(hk0, rho, K, T, mu, Vb, Vc, eps0,
 ''' functions for determining chemical potential at the target filling '''
 def f_newmu(mu, hk0, rho, K, T, Vb, Vc, eps0,
             epsilon_threshold, N_epsilon, maxiter, include_hartree, mix=0.50, n_target=1.0):
-    _, _, _, _, _, n = Rho_next(hk0, rho, K, T, mu, Vb, Vc, eps0, epsilon_threshold, N_epsilon, maxiter, include_hartree, mix)
+    _, _, energies, _, _, n = Rho_next(
+        hk0, rho, K, T, mu, Vb, Vc, eps0, epsilon_threshold,
+        N_epsilon, maxiter, include_hartree, mix, n_target=n_target)
+    if n_target == 1.0 and T > 0:
+        # n - 1 = upper-band electrons - lower-band holes. Evaluate
+        # their logarithms directly: subtracting from a filled band loses
+        # the exponentially small hole density in an insulator.
+        log_electrons = logsumexp(-np.logaddexp(0.0, (energies[1] - mu) / T))
+        log_holes = logsumexp(-np.logaddexp(0.0, (mu - energies[0]) / T))
+        return log_electrons - log_holes
     return n - n_target
 
 def find_bracket(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
@@ -410,7 +420,7 @@ def NewMu2(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
                                               epsilon_threshold, N_epsilon, maxiter, include_hartree, mix, n_target),
                      xtol=xtol, rtol=rtol, maxiter=maxiterbrentq)
     rho_final, err, energije, vecs, fs, n = Rho_next(hk0, rho, K, T, mu_star, Vb, Vc, eps0, epsilon_threshold, N_epsilon,
-                                                          maxiter, include_hartree, mix=mix)
+                                                          maxiter, include_hartree, mix=mix, n_target=n_target)
     return mu_star, rho_final, err, energije, vecs, fs, n
 
 ''' expectation value of Hamiltonian. I need this for specific heat and entropy '''

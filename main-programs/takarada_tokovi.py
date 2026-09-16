@@ -895,7 +895,7 @@ def fd(eps, mu, T):
 ''' Pi(omega) bubble integral. I rescale energies by Gamma and use Gauss-Legendre quadrature
     because I need to integrate from -infty to +infty, but integrand is big only at poles of Green's functions)'''
 @njit(cache=True)
-def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, mu_, invt, nodes, weights, eps=1e-5, n_eps=1.0):
+def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, mu_, invt, nodes, weights, eps=1e-5, n_eps=1.0, faktor=1.0):
     w    = omega / Gamma
     e_mk = E_mk  / Gamma
     e_nk = E_nk  / Gamma
@@ -958,7 +958,7 @@ def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, mu_, invt, nodes, weights, eps=1e-
             dn  = e - e_nk
             dmw = dm + w
             dnw = dn + w
-            pref = e - mu_ + 0.5 * w
+            pref = e - mu_ + 0.5 * w * faktor
             wi   = weights[i] * half
 
             f  = 1.0 / (np.exp((e  - mu_) * invt) + 1.0)
@@ -1001,7 +1001,7 @@ def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, mu_, invt, nodes, weights, eps=1e-
 
 ''' I precompute Pi_mn for all m,n,k for a fixed omega. this object is then used for all bubbles with different vertices attached '''
 @njit(parallel=True, cache=True)
-def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-5):
+def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-5, faktor=1.0):
     Norb, Nk = energije.shape
 
     pi_mn  = np.zeros((Norb, Norb, Nk), dtype=np.complex128)
@@ -1013,7 +1013,7 @@ def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-
         for m in range(Norb):
             for n in range(m, Norb):
 
-                pi_mnk, pi_nmk, pie_mnk, pie_nmk = Pi_bubble_tilde(omega, energije[m,j], energije[n,j], Gamma, mu_, invt, nodes, weights, eps)
+                pi_mnk, pi_nmk, pie_mnk, pie_nmk = Pi_bubble_tilde(omega, energije[m,j], energije[n,j], Gamma, mu_, invt, nodes, weights, eps, faktor=faktor)
 
                 pi_mn [m, n, j] = pi_mnk
                 pi_nm [m, n, j] = pi_nmk
@@ -1059,7 +1059,7 @@ def compute_single_om_fused(
     eps=1e-5,
     include_hartree=True,
     include_phonon=False,
-    lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None
+    lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None, faktor=1.0
 ):
     Nop = len(thetas)
 
@@ -1074,7 +1074,7 @@ def compute_single_om_fused(
 
     # ── single precomputation of bubble for this omega ──────────────────────────
     pi_mn, pi_nm, piw_mn, piw_nm = precompute_Pi_all(
-        om, energije, Gamma, mu_, invt, nodes, weights, eps
+        om, energije, Gamma, mu_, invt, nodes, weights, eps, faktor=faktor
     )
 
     # ── chi0 matrix ──────────────────
@@ -1125,7 +1125,7 @@ def compute_chi(
     eps=1e-5,
     include_hartree=True,
     include_phonon=False,
-    lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None
+    lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None, faktor=1.0
 ):
     if include_phonon:
         missing = []
@@ -1182,7 +1182,7 @@ def compute_chi(
             energije, rhos_tilde,
             eps=eps,
             include_hartree=include_hartree, include_phonon=include_phonon,
-            lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=Vb, Vc=Vc, Gamma_ph=Gamma_ph
+            lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=Vb, Vc=Vc, Gamma_ph=Gamma_ph, faktor=faktor
         )
         return om_idx, result
 
