@@ -908,28 +908,29 @@ def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, mu_, invt, nodes, weights, eps=1e-
     # A(e) ~ 1/(pi * e^2) < eps  =>  e > 1/(pi*eps)
     epsilon_max = np.sqrt(np.abs(np.arccosh(1/(eps*4*T))) * 2 * T) / Gamma * n_eps
 
-    # Three integration intervals, one per peak
-    centers = np.array([e_mk, e_nk - w, mu_])
+    # Cover spectral poles from both mn and nm channels, plus the Fermi region.
+    centers = np.array([e_mk, e_nk - w, e_nk, e_mk - w, mu_])
+    n_centers = len(centers)
 
-    # Build, sort, merge intervals (same as your new code)
-    raw = np.empty((3, 2), dtype=np.float64)
-    for c in range(3):
+    # Build, sort, and merge intervals to avoid integrating overlaps twice.
+    raw = np.empty((n_centers, 2), dtype=np.float64)
+    for c in range(n_centers):
         raw[c, 0] = centers[c] - epsilon_max
         raw[c, 1] = centers[c] + epsilon_max
 
     # Sort by left endpoint
-    for i in range(3):
-        for j in range(i + 1, 3):
+    for i in range(n_centers):
+        for j in range(i + 1, n_centers):
             if raw[j, 0] < raw[i, 0]:
                 raw[i, 0], raw[j, 0] = raw[j, 0], raw[i, 0]
                 raw[i, 1], raw[j, 1] = raw[j, 1], raw[i, 1]
 
     # Merge overlapping intervals
-    merged  = np.empty((3, 2), dtype=np.float64)
+    merged  = np.empty((n_centers, 2), dtype=np.float64)
     merged[0, 0] = raw[0, 0]
     merged[0, 1] = raw[0, 1]
     n_merged = 1
-    for i in range(1, 3):
+    for i in range(1, n_centers):
         if raw[i, 0] <= merged[n_merged - 1, 1]:
             merged[n_merged - 1, 1] = max(raw[i, 1], merged[n_merged - 1, 1])
         else:
