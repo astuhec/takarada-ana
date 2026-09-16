@@ -604,7 +604,7 @@ def measure(Nk, Nop, measure_operators, rho):
                 rho[1,1,j]*measure_operators[n,1,1,j]
             )
     measurements = measurements_k.sum(axis=1)
-    return measurements, measurements_k
+    return measurements#, measurements_k
 
 @njit(parallel=True)
 def norm(rho):
@@ -684,7 +684,7 @@ def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
     H0 = h_k(K, hk0, rho0, Vb, Vc, 0.0, include_hartree)
 
     rho_expvals = np.zeros((Nop, N_points), dtype=np.complex128)
-    rho_expvals_k = np.zeros((Nop, N_points, Nk), dtype=np.complex128)
+    #rho_expvals_k = np.zeros((Nop, N_points, Nk), dtype=np.complex128)
     rho_norms = np.zeros(N_points)
     Delta_bs = np.zeros(N_points, dtype=np.complex128)
     Delta_cs = np.zeros(N_points, dtype=np.complex128)
@@ -774,15 +774,15 @@ def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
 
             measure_operators = np.concatenate(ops_list, axis=0)
 
-        measurement_t, measurement_t_k = measure(Nk, Nop, measure_operators, rho)
+        measurement_t = measure(Nk, Nop, measure_operators, rho)
         rho_expvals[:,i] = measurement_t
-        rho_expvals_k[:,i,:] = measurement_t_k
+        #rho_expvals_k[:,i,:] = measurement_t_k
         rho_norms[i] = norm(rho)
         Delta_bs[i], Delta_cs[i] = Delta(K, rho, Vb, Vc)
         ns0[i] = np.sum(rho[0,0]).real / Nk
         ns1[i] = np.sum(rho[1,1]).real / Nk
         
-    return ts, rho_expvals, rho_expvals_k, rho_norms, Delta_bs, Delta_cs, ns0, ns1
+    return ts, rho_expvals, rho_norms, Delta_bs, Delta_cs, ns0, ns1
 
 ''' susceptibility obtained from temporal response, using Fourier transform. window exp(-eta*t) is applied '''
 def susceptibility(time, signal, probe, eta, omega_cut, Nk):
