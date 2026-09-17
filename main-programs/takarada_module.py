@@ -13,7 +13,7 @@ def load_config(path):
             
 ''' Takarada model '''
 class model:
-    def __init__(self, input_file, compute_gap_infty=True, verbose=True,
+    def __init__(self, input_file, compute_gap_infty=True, verbose=True, Nk=None,
                  b=None, t=None, t_=None, t12=None, epsilon=None, epsilon_=None, Vb=None, Vc=None, delta=None, mazza=None, delta_mazza=None):
 
         self.mazza=mazza
@@ -47,7 +47,7 @@ class model:
 
         self.config = config
 
-        self.Nk = config.get("Nk")
+        self.Nk = config.get("Nk") if Nk==None else Nk
         if verbose:
             print(f'=' * 80 + '\n' + 'Started 2-orbital calculation' + '\n' + f'=' * 80, flush=True)
             print(f'Initialized 1d lattice with Nk={self.Nk} unit cells.', flush=True)
