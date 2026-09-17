@@ -215,6 +215,7 @@ class model:
         eps2 = params['eps2']
         deg = params['deg']
         n_workers = params['n_workers']
+        n_eps = params["n_eps"]
 
         maxbrentq = config.get("maxbrentq")
         Gammas = config.get("Gammas")
@@ -284,7 +285,7 @@ class model:
                 
                 if evaluate_vertex_DC:
                     ''' Kubo's DC coefficients, bubble and corrections '''
-                    self.DC_bubble_corr(nodes, weights, Gammas, omega0, eps2, n_workers=n_workers)
+                    self.DC_bubble_corr(nodes, weights, Gammas, omega0, eps2, n_workers=n_workers, n_eps=n_eps)
                         
                 if i > 0:
                     self.rho = rho_save
@@ -455,7 +456,7 @@ class model:
         self.L22_boltz.append(helpers.to_scalar_if_single(l22_boltz))
         self.L12_boltz.append(helpers.to_scalar_if_single(l12_boltz))
 
-    def DC_bubble_corr(self, nodes, weights, Gammas, omega0, eps, n_workers=None):
+    def DC_bubble_corr(self, nodes, weights, Gammas, omega0, eps, n_workers=None, n_eps=1.0):
         Ngamma = len(Gammas)
 
         l11_0 = np.zeros(Ngamma)
@@ -472,7 +473,7 @@ class model:
             mu_ = self.mu / Gamma
             invt = Gamma / self.T
             
-            results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers)
+            results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers, n_eps=n_eps)
             
             Chi_jj0 = - results['chi_jj0'].imag
             dChi_jj  = - results['dchi_jj'].imag
@@ -535,6 +536,7 @@ class model:
         Gamma = params["Gamma"]
         eps = params["eps"]
         n_workers = params["n_workers"]
+        n_eps = params["n_eps"]
 
         omega_low = params["omega_low"]
         omega_high = params["omega_high"]
@@ -552,7 +554,7 @@ class model:
             results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps, faktor=faktor)
         elif include_phonon:
             results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps,
-                                             include_hartree=self.include_hartree, include_phonon=include_phonon,
+                                             include_hartree=self.include_hartree, include_phonon=include_phonon, n_eps=n_eps,
                                              lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=self.Vb, Vc=self.Vc, Gamma_ph=Gamma_ph,faktor=faktor)
 
         results["Gamma"] = Gamma

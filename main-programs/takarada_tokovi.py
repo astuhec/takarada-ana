@@ -1002,7 +1002,7 @@ def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, mu_, invt, nodes, weights, eps=1e-
 
 ''' I precompute Pi_mn for all m,n,k for a fixed omega. this object is then used for all bubbles with different vertices attached '''
 @njit(parallel=True, cache=True)
-def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-5, faktor=1.0):
+def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-5, faktor=1.0, n_eps=1.0):
     Norb, Nk = energije.shape
 
     pi_mn  = np.zeros((Norb, Norb, Nk), dtype=np.complex128)
@@ -1014,7 +1014,7 @@ def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-
         for m in range(Norb):
             for n in range(m, Norb):
 
-                pi_mnk, pi_nmk, pie_mnk, pie_nmk = Pi_bubble_tilde(omega, energije[m,j], energije[n,j], Gamma, mu_, invt, nodes, weights, eps, faktor=faktor)
+                pi_mnk, pi_nmk, pie_mnk, pie_nmk = Pi_bubble_tilde(omega, energije[m,j], energije[n,j], Gamma, mu_, invt, nodes, weights, eps, faktor=faktor, n_eps=n_eps)
 
                 pi_mn [m, n, j] = pi_mnk
                 pi_nm [m, n, j] = pi_nmk
@@ -1059,7 +1059,7 @@ def compute_single_om_fused(
     rhos_tilde,
     eps=1e-5,
     include_hartree=True,
-    include_phonon=False,
+    include_phonon=False, n_eps=1.0,
     lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None, faktor=1.0
 ):
     Nop = len(thetas)
@@ -1075,7 +1075,7 @@ def compute_single_om_fused(
 
     # ── single precomputation of bubble for this omega ──────────────────────────
     pi_mn, pi_nm, piw_mn, piw_nm = precompute_Pi_all(
-        om, energije, Gamma, mu_, invt, nodes, weights, eps, faktor=faktor
+        om, energije, Gamma, mu_, invt, nodes, weights, eps, faktor=faktor, n_eps=n_eps
     )
 
     # ── chi0 matrix ──────────────────
@@ -1123,7 +1123,7 @@ def compute_chi(
     rhos_tilde,
     verbose=True,
     n_workers=None, #None: number of CPU cores, or specify an integer
-    eps=1e-5,
+    eps=1e-5, n_eps=1.0,
     include_hartree=True,
     include_phonon=False,
     lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None, faktor=1.0
