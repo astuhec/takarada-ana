@@ -658,24 +658,24 @@ def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
     if len(static_ops) > 0:
         ops_list.append(np.concatenate(static_ops, axis=0))
 
-    if do_freeze:
-        # evaluate dynamic operators once
-        for p in dynamic_providers:
-            ops = p(K, rho, geom, phases, g_ffts)
-            if ops.ndim == 3:
-                ops = ops[np.newaxis, ...]
-            ops_list.append(ops)
+    #if do_freeze:
+    #    # evaluate dynamic operators once
+    #    for p in dynamic_providers:
+    #        ops = p(K, rho, geom, phases, g_ffts)
+    #        if ops.ndim == 3:
+    #            ops = ops[np.newaxis, ...]
+    #        ops_list.append(ops)
 
-        measure_operators_fixed = np.concatenate(ops_list, axis=0)
-        Nop = measure_operators_fixed.shape[0]
+    #    measure_operators_fixed = np.concatenate(ops_list, axis=0)
+    #    Nop = measure_operators_fixed.shape[0]
 
-    else:
+    #else:
         # dynamic operators will be recomputed
-        for p in dynamic_providers:
-            ops = p(K, rho, geom, phases, g_ffts)
-            if ops.ndim == 3:
-                ops = ops[np.newaxis, ...]
-            ops_list.append(ops)
+    for p in dynamic_providers:
+        ops = p(K, rho, geom, phases, g_ffts)
+        if ops.ndim == 3:
+            ops = ops[np.newaxis, ...]
+        ops_list.append(ops)
 
         measure_operators = np.concatenate(ops_list, axis=0)
         Nop = measure_operators.shape[0]
@@ -758,21 +758,21 @@ def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
 
 
         ''' 6. measurements '''
-        if do_freeze:
-            measure_operators = measure_operators_fixed
-        else:
-            ops_list = []
+        #if do_freeze:
+        #    measure_operators = measure_operators_fixed
+        #else:
+        ops_list = []
 
-            if len(static_ops) > 0:
-                ops_list.append(np.concatenate(static_ops, axis=0))
+        if len(static_ops) > 0:
+            ops_list.append(np.concatenate(static_ops, axis=0))
 
-            for p in dynamic_providers:
-                ops = p(K, rho, geom, phases, g_ffts)
-                if ops.ndim == 3:
-                    ops = ops[np.newaxis, ...]
-                ops_list.append(ops)
+        for p in dynamic_providers:
+            ops = p(K, rho, geom, phases, g_ffts)
+            if ops.ndim == 3:
+                ops = ops[np.newaxis, ...]
+            ops_list.append(ops)
 
-            measure_operators = np.concatenate(ops_list, axis=0)
+        measure_operators = np.concatenate(ops_list, axis=0)
 
         measurement_t = measure(Nk, Nop, measure_operators, rho)
         rho_expvals[:,i] = measurement_t
