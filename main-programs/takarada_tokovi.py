@@ -1182,7 +1182,7 @@ def compute_chi(
             thetas, tok_tilde, tokK_tilde, mat_tilde,
             energije, rhos_tilde,
             eps=eps,
-            include_hartree=include_hartree, include_phonon=include_phonon,
+            include_hartree=include_hartree, include_phonon=include_phonon, n_eps=n_eps,
             lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=Vb, Vc=Vc, Gamma_ph=Gamma_ph, faktor=faktor
         )
         return om_idx, result
