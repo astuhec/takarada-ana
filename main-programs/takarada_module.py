@@ -613,7 +613,7 @@ class model:
             print("Choose a valid measure provider." \
             "Currently available : current, kinetic_current, curent_kinetic_current, current_interaction, all_three", flush=True)
 
-        times, measurement, measurement_k, norma, delta_bs, delta_cs, ns0, ns1 = tokovi.simulate_pulz(self.K, self.hk0, self.rho, self.vecs, self.Vb, self.Vc, self.include_hartree,
+        times, measurement, norma, delta_bs, delta_cs, ns0, ns1 = tokovi.simulate_pulz(self.K, self.hk0, self.rho, self.vecs, self.Vb, self.Vc, self.include_hartree,
                                                                                        perturbation_operator, measure_provider,
                                                                                        A0, t0, sigma, Omega0, dt, t_max,
                                                                                        do_freeze, Ncorr, tol, self.geom, self.phases, self.g_ffts, Gamma=Gamma_, verbose=verbose, freq_verbose=freq_verbose)
@@ -621,7 +621,7 @@ class model:
         pulz = tokovi.A_pulz(times, A0, t0, sigma, Omega0)
         results = {"time" : times,
                    "measurement" : measurement,
-                   "measurement_k" : measurement_k,
+                   #"measurement_k" : measurement_k,
                    "pulz" : pulz,
                    "norma" : norma,
                    "delta_bs" : delta_bs,
