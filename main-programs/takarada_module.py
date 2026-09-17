@@ -564,7 +564,7 @@ class model:
         print('\n' + 'Finished calculation of RPA responses.', flush=True)
         return results
 
-    def simulate_perturbation(self, do_freeze=None, Gamma_=None, dt=None, t_max=None):
+    def simulate_perturbation(self, do_freeze=None, Gamma_=None, dt=None, t_max=None, add_diagonals=None):
         print('\n' + '-' * 80 + '\n' + \
               'Started simulation of perturbation.', flush=True)
         params = self.config.get("params_perturbation")
@@ -617,10 +617,17 @@ class model:
             print("Choose a valid measure provider." \
             "Currently available : current, kinetic_current, curent_kinetic_current, current_interaction, all_three", flush=True)
 
+        if add_diagonals!=None:
+            fs = np.zeros((2, self.Nk))
+            fs[0] = helpers.fd(self.energije[0], self.mu, self.T)
+            fs[1] = helpers.fd(self.energije[1], self.mu, self.T)
+        else:
+            fs = None
         times, measurement, norma, delta_bs, delta_cs, ns0, ns1 = tokovi.simulate_pulz(self.K, self.hk0, self.rho, self.vecs, self.Vb, self.Vc, self.include_hartree,
                                                                                        perturbation_operator, measure_provider,
                                                                                        A0, t0, sigma, Omega0, dt, t_max,
-                                                                                       do_freeze, Ncorr, tol, self.geom, self.phases, self.g_ffts, Gamma=Gamma_, verbose=verbose, freq_verbose=freq_verbose)
+                                                                                       do_freeze, Ncorr, tol, self.geom, self.phases, self.g_ffts, Gamma=Gamma_, verbose=verbose, freq_verbose=freq_verbose,
+                                                                                       add_diagonals=add_diagonals, fs=fs)
         
         pulz = tokovi.A_pulz(times, A0, t0, sigma, Omega0)
         results = {"time" : times,

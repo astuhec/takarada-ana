@@ -583,11 +583,14 @@ def relax_rho(rho, rho_eq, dt, Gamma):
     decay = np.exp(-Gamma * dt)
     return rho_eq + decay * (rho - rho_eq)
 
-def dephase_rho(rho, vecs, dt, Gamma):
+def dephase_rho(rho, vecs, dt, Gamma, add_diagonals=None, fs=None):
     rho_band = operator_tilde(rho, vecs)
     decay = np.exp(-Gamma*dt)
     rho_band[0,1,:] *= decay
     rho_band[1,0,:] *= decay
+    if add_diagonals!=None:
+        rho_band[0,0,:] = fs[0,:] + decay*(rho_band[0,0,:] - fs[0,:])
+        rho_band[1,1,:] = fs[1,:] + decay*(rho_band[1,1,:] - fs[1,:])
     return operator_bare(rho_band, vecs)
 
 ''' expectation value of measure_operators when system is described by density matrix rho'''
@@ -647,7 +650,7 @@ def compile_measure_provider(measure_provider):
 def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
                   perturbation_operator, measure_provider,
                   A0, t0, sigma, Omega, dt, t_max,
-                  do_freeze, Ncorr, tol, geom, phases, g_ffts, Gamma=0.0, verbose=True, freq_verbose=50):
+                  do_freeze, Ncorr, tol, geom, phases, g_ffts, add_diagonals=None, fs=None, Gamma=0.0, verbose=True, freq_verbose=50):
     N_points = int(t_max/dt)
     Nk = len(K)
 
@@ -658,19 +661,6 @@ def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
     if len(static_ops) > 0:
         ops_list.append(np.concatenate(static_ops, axis=0))
 
-    #if do_freeze:
-    #    # evaluate dynamic operators once
-    #    for p in dynamic_providers:
-    #        ops = p(K, rho, geom, phases, g_ffts)
-    #        if ops.ndim == 3:
-    #            ops = ops[np.newaxis, ...]
-    #        ops_list.append(ops)
-
-    #    measure_operators_fixed = np.concatenate(ops_list, axis=0)
-    #    Nop = measure_operators_fixed.shape[0]
-
-    #else:
-        # dynamic operators will be recomputed
     for p in dynamic_providers:
         ops = p(K, rho, geom, phases, g_ffts)
         if ops.ndim == 3:
@@ -709,7 +699,7 @@ def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
 
         ''' 1. first dissipative half-step '''
         if Gamma != 0.0:
-            rho_a = dephase_rho(rho, vecs, dt/2, Gamma)
+            rho_a = dephase_rho(rho, vecs, dt/2, Gamma, add_diagonals, fs)
         else:
             rho_a = rho
 
@@ -752,15 +742,12 @@ def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
 
         ''' 5. final dissipative half-step'''
         if Gamma != 0.0:
-            rho = dephase_rho(rho_b, vecs, dt/2, Gamma)
+            rho = dephase_rho(rho_b, vecs, dt/2, Gamma, add_diagonals, fs)
         else:
             rho = rho_b
 
 
         ''' 6. measurements '''
-        #if do_freeze:
-        #    measure_operators = measure_operators_fixed
-        #else:
         ops_list = []
 
         if len(static_ops) > 0:
