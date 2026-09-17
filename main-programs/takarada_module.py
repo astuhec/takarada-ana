@@ -551,7 +551,7 @@ class model:
         mu_ = self.mu / Gamma
         invt = Gamma / self.T
         if not include_phonon:
-            results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps, faktor=faktor)
+            results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps, faktor=faktor, n_eps=n_eps)
         elif include_phonon:
             results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps,
                                              include_hartree=self.include_hartree, include_phonon=include_phonon, n_eps=n_eps,
