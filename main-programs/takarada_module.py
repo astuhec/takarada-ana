@@ -562,13 +562,15 @@ class model:
         print('\n' + 'Finished calculation of RPA responses.', flush=True)
         return results
 
-    def simulate_perturbation(self, do_freeze=None, Gamma_=None):
+    def simulate_perturbation(self, do_freeze=None, Gamma_=None, dt=None, t_max=None):
         print('\n' + '-' * 80 + '\n' + \
               'Started simulation of perturbation.', flush=True)
         params = self.config.get("params_perturbation")
 
         overrides = {
-            "Gamma_" : Gamma_
+            "Gamma_" : Gamma_,
+            "dt" : dt,
+            "t_max" : t_max
         }
 
         for key, value in overrides.items():
