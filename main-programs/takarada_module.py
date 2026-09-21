@@ -14,7 +14,7 @@ def load_config(path):
 ''' Takarada model '''
 class model:
     def __init__(self, input_file, compute_gap_infty=True, verbose=True, Nk=None,
-                 b=None, t=None, t_=None, t12=None, epsilon=None, epsilon_=None, Vb=None, Vc=None, delta=None, mazza=None, delta_mazza=None):
+                 b=None, t=None, t_=None, t12=None, epsilon=None, epsilon_=None, Vb=None, Vc=None, delta=None, mazza=None, delta_mazza=None, Gamma=None):
 
         self.mazza=mazza
         self.delta_mazza=delta_mazza
@@ -46,7 +46,7 @@ class model:
         self.phys_parameters = phys_parameters
 
         self.config = config
-        self.Gamma = config.get("Gamma")
+        self.Gamma = config.get("Gamma") if Gamma==None else Gamma
 
         self.Nk = config.get("Nk") if Nk==None else Nk
         if verbose:
@@ -150,8 +150,11 @@ class model:
 
     def GS(self):
         rho0 = helpers.rho0(self.Nk)
-        rho, err, energije, vecs, fs, n = helpers.Rho_next(self.hk0, rho0, self.K, 0, self.mu, self.Vb, self.Vc, self.eps0,
-                                                  self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, self.Gamma, mix=0.5, mazza=self.mazza, n_target=self.n_target)
+        mu, rho, err, energije, vecs, fs, n = helpers.ground_state_fixed_filling(
+            self.hk0, rho0, self.K, self.mu, self.Vb, self.Vc, self.eps0,
+            self.epsilon_threshold, self.N_epsilon, self.maxiter,
+            self.include_hartree, self.Gamma, n_target=self.n_target,
+            mazza=self.mazza, mix=0.5)
         self.rho = rho
         self.energije = energije
         self.vecs = vecs
@@ -159,9 +162,7 @@ class model:
         self.n = n
         self.delta_b, self.delta_c = helpers.Delta(self.K, self.rho, self.Vb, self.Vc)
         self.gap = np.min(self.energije[1]) - np.max(self.energije[0])
-        self.mu = 0.5 * (np.min(self.energije[1]) + np.max(self.energije[0]))
-        if self.n_target != 1.0:
-            _, self.mu = helpers.zero_T_filling(self.energije, self.n_target)
+        self.mu = mu
         self.mu_GS = self.mu
 
         self.rho_GS = self.rho
