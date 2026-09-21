@@ -283,6 +283,14 @@ def zasedenost_Gamma(energije, mu, Gamma, beta):
     occ = 0.5 - np.imag(digamma(z))/np.pi
     return np.sum(occ) / Nk
 
+def zasedenost_Gamma_lowT(energije, mu, Gamma, beta):
+    Nk = energije.shape[1]
+    d = energije - mu
+    r2 = Gamma**2 + d**2
+    occ0 = 0.5 - np.arctan(d / Gamma) / np.pi
+    occ2 = np.pi / (3.0 * beta**2)* Gamma * d / r2**2
+    return np.sum(occ0 + occ2) / Nk
+
 ''' various functions for converging the self-consistnecy equation '''
 def Rho_next(hk0, rho, K, T, mu, Vb, Vc, eps0,
              epsilon_threshold, N_epsilon, maxiter, include_hartree, mix=0.5, mazza=None, n_target=1.0):
