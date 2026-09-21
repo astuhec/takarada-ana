@@ -8,6 +8,7 @@ from tqdm import tqdm
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy import linalg as LA
+from scipy.special import digamma
 
 ''' this function is called when I create free Hamiltonian and current operators '''
 @njit(cache=True)
@@ -267,6 +268,19 @@ def F(hamiltonian, rho, K, T, mu, n_target=1.0):
 ''' occupation, which should be 1.0 for undoped case '''
 def zasedenost(rho):
     return (np.sum(np.diag(np.einsum('ijk->ij', rho)))/(np.prod(rho.shape[-1]))).real
+
+''' occupation with broadened spectral functions '''
+@njit(cache=True)
+def fermi(x,beta):
+    return 0.5 * (1.0 - np.tanh(0.5*beta*x))
+
+@njit(cache=True, parallel=True)
+def zasedenost_Gamma(energije, mu, Gamma, beta):
+    # z is the argument of digamma function
+    Nk = energije.shape[1]
+    z = 0.5 + beta/(2.0*np.pi) * (Gamma + 1j*(energije - mu))
+    occ = 0.5 - np.imag(digamma(z))/np.pi
+    return np.sum(occ) / Nk
 
 ''' various functions for converging the self-consistnecy equation '''
 def Rho_next(hk0, rho, K, T, mu, Vb, Vc, eps0,
