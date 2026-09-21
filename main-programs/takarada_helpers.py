@@ -9,6 +9,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy import linalg as LA
 from scipy.special import digamma
+import numpy as np
+from scipy.optimize import brentq
+from scipy.special import logsumexp
 
 ''' this function is called when I create free Hamiltonian and current operators '''
 @njit(cache=True)
@@ -218,7 +221,6 @@ def zero_T_filling(energije, n_target):
     mu = 0.5 * (fermi + above.min()) if fraction == 1.0 and above.size else fermi
     return occupations, mu
 
-
 def H_diagonalize(hamiltonian, K, T, mu, n_target=1.0):
     Nk = len(K)
 
@@ -274,7 +276,6 @@ def zasedenost(rho):
 def fermi(x,beta):
     return 0.5 * (1.0 - np.tanh(0.5*beta*x))
 
-@njit(cache=True, parallel=True)
 def zasedenost_Gamma(energije, mu, Gamma, beta):
     # z is the argument of digamma function
     Nk = energije.shape[1]
@@ -437,6 +438,43 @@ def NewMu2(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
                                                           maxiter, include_hartree, mix=mix, n_target=n_target)
     return mu_star, rho_final, err, energije, vecs, fs, n
 
+def mu_fixed_bands(energije, T, Gamma=None, n_target=1.0):
+    if not 0 < n_target < 2:
+        raise ValueError("n_target must be between 0 and 2")
+    if T < 0:
+        raise ValueError("T must be nonnegative")
+    if T == 0:
+        return zero_T_filling(energije, n_target)[1]
+
+    Nk = energije.shape[-1]
+
+    def residual(mu):
+        if n_target == 1.0 and Gamma==None:
+            # Stable electron–hole balance, even deep inside a gap.
+            # Same approach as helpers.f_newmu, with fixed energies.
+            log_e = logsumexp(
+                -np.logaddexp(0.0, (energije[1] - mu) / T)
+            )
+            log_h = logsumexp(
+                -np.logaddexp(0.0, (mu - energije[0]) / T)
+            )
+            return log_e - log_h
+
+        if Gamma==None:
+            return fd(energije, mu, T).sum() / Nk - n_target
+        else:
+            return zasedenost_Gamma(energije, mu, Gamma, 1/T) - n_target
+        
+    width = max(np.ptp(energije), T)
+    lo = energije.min() - width
+    hi = energije.max() + width
+    while residual(lo) > 0 or residual(hi) < 0:
+        width *= 2
+        lo = energije.min() - width
+        hi = energije.max() + width
+
+    return brentq(residual, lo, hi)
+
 ''' expectation value of Hamiltonian. I need this for specific heat and entropy '''
 @njit(parallel=True, cache=True)
 def energy_average(K, rho, phys_parameters, energije, mu, T):
@@ -460,14 +498,17 @@ def energy_average(K, rho, phys_parameters, energije, mu, T):
     return en.real / Nk
 
 ''' density of states '''
-def DoS(K, energije, epsilons, mu, tok_tilde, faktor, shape='Gaussian'):
+def DoS(K, energije, epsilons, mu, tok_tilde, faktor, shape='Gaussian', Gamma=None):
     Nk = len(K)
     v_max = np.max(np.abs(tok_tilde))
     sigma = np.sqrt(v_max * (epsilons[1] - epsilons[0]) * (K[1] - K[0])) * faktor
     dos = np.zeros((2, len(epsilons)))
     for k in prange(Nk):
         for alpha in range(2):
-            dos[alpha] += delta_approximation(epsilons - energije[alpha,k] + mu, sigma, shape) 
+            if Gamma==None:
+                dos[alpha] += delta_approximation(epsilons - energije[alpha,k] + mu, sigma, shape) 
+            else:
+                dos[alpha] += 1/np.pi * Gamma / ((epsilons - energije[alpha,k])**2 + Gamma**2)
     return dos / Nk
 
 ''' approximation for Dirac delta function '''
