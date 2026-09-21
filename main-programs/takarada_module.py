@@ -46,6 +46,7 @@ class model:
         self.phys_parameters = phys_parameters
 
         self.config = config
+        self.Gamma = config.get("Gamma")
 
         self.Nk = config.get("Nk") if Nk==None else Nk
         if verbose:
@@ -137,7 +138,6 @@ class model:
 
         self.L11_boltz = []
         self.L12_boltz  = []
-        self.L22_boltz = []
 
         self.L11_0 = []
         self.L11_corr = []
@@ -151,7 +151,7 @@ class model:
     def GS(self):
         rho0 = helpers.rho0(self.Nk)
         rho, err, energije, vecs, fs, n = helpers.Rho_next(self.hk0, rho0, self.K, 0, self.mu, self.Vb, self.Vc, self.eps0,
-                                                  self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, mix=0.5, mazza=self.mazza, n_target=self.n_target)
+                                                  self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, self.Gamma, mix=0.5, mazza=self.mazza, n_target=self.n_target)
         self.rho = rho
         self.energije = energije
         self.vecs = vecs
@@ -172,11 +172,9 @@ class model:
 
     def next_T(self, maxbrentq=50, mu_initial=None) -> None:
         if mu_initial==None:
-            #rho, err, energije, vecs, _, n, mu = helpers.NewMu(self.rho, self.K, self.hk0, self.Vb, self.Vc, self.T, self.mu, self.dmu, self.maxiter, self.epsilon_threshold, self.eps_last, 0.5, self.mix2, self.mix3, self.n_pass, self.max_trials, faktor1=0.001, include_hartree=self.include_hartree)
-
-            mu, rho, err, energije, vecs, _, n = helpers.NewMu2(self.mu - self.dmu, self.mu + self.dmu, self.hk0, self.rho, self.K, self.T, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, mix=0.5, xtol=self.n_pass, rtol=self.n_pass, maxiterbrentq=maxbrentq, n_target=self.n_target)
+            mu, rho, err, energije, vecs, _, n = helpers.NewMu2(self.mu - self.dmu, self.mu + self.dmu, self.hk0, self.rho, self.K, self.T, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, self.Gamma, mix=0.5, xtol=self.n_pass, rtol=self.n_pass, maxiterbrentq=maxbrentq, n_target=self.n_target)
         else:
-            rho, err, energije, vecs, _, n = helpers.Rho_next(self.hk0, self.rho, self.K, self.T, mu_initial, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, mix=0.5, n_target=self.n_target)
+            rho, err, energije, vecs, _, n = helpers.Rho_next(self.hk0, self.rho, self.K, self.T, mu_initial, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, self.Gamma, mix=0.5, n_target=self.n_target)
             mu = mu_initial
 
         self.rho = rho
@@ -218,7 +216,7 @@ class model:
         n_eps = params["n_eps"]
 
         maxbrentq = config.get("maxbrentq")
-        Gammas = config.get("Gammas")
+        Gamma = config.get("Gamma")
         eps_ns0 = config.get("eps_ns0")
         betas0 = config.get("beta0") if beta==None else beta
         scale = config.get("scale") if scale==None else scale
@@ -231,7 +229,7 @@ class model:
         if evaluate_vertex_DC:
             nodes, weights = roots_legendre(deg)
             
-        self.Gammas = Gammas
+        self.Gamma = Gamma
         print('started', flush=True)
         for i, beta in enumerate(betas):
             eps_ns = max(self.errors) if len(self.errors) > 0 else eps_ns0
@@ -281,11 +279,11 @@ class model:
 
                 if evaluate_transport_DC:
                     ''' DC coefficients: Boltzmann's and Kubo's, evaluating the bubble diagram (coefficients as integrals of transport functions) '''
-                    self.DC_coefficients(eps, Nomega, Gammas)
+                    self.DC_coefficients(eps, Nomega, Gamma)
                 
                 if evaluate_vertex_DC:
                     ''' Kubo's DC coefficients, bubble and corrections '''
-                    self.DC_bubble_corr(nodes, weights, Gammas, omega0, eps2, n_workers=n_workers, n_eps=n_eps)
+                    self.DC_bubble_corr(nodes, weights, Gamma, omega0, eps2, n_workers=n_workers, n_eps=n_eps)
                         
                 if i > 0:
                     self.rho = rho_save
@@ -412,111 +410,75 @@ class model:
 
         return l11, l12, l12K, l22, l12q, l22q
 
-    def DC_coefficients(self, eps, Nomega, Gammas):
+    def DC_coefficients(self, eps, Nomega, Gamma):
         epsilon_max = np.sqrt(np.abs(np.arccosh(1/(eps*4*self.T))) * 2 * self.T)
         epsilons = np.linspace(-epsilon_max, epsilon_max, Nomega, dtype=np.float64)
 
         K0b, K1b = tokovi.Kn_boltz(self.K, self.energije, self.mu, self.T)
         mfd1 = -tokovi.fd_1(epsilons, self.T)
 
-        Ngamma = len(Gammas)
+        l11_, l12_, l12K_, l22_, l12q_, l22q_ = self.ls_Kubo(epsilons, Gamma, mfd1)
 
-        l11 = np.zeros(Ngamma)
-        l12 = np.zeros(Ngamma)
-        l12K = np.zeros(Ngamma)
-        l22 = np.zeros(Ngamma)
-        l12q = np.zeros(Ngamma)
-        l22q = np.zeros(Ngamma)
 
-        l11_boltz = np.zeros(Ngamma)
-        l22_boltz = np.zeros(Ngamma)
-        l12_boltz = np.zeros(Ngamma)
+        self.L11.append(l11_.real)
+        self.L12.append(l12_.real)
+        self.L12K.append(l12K_.real)
+        self.L22.append(l22_.real)
+        self.L12q.append(l12q_.real)
+        self.L22q.append(l22q_.real)
 
-        for g, Gamma in enumerate(Gammas):
-            l11_, l12_, l12K_, l22_, l12q_, l22q_ = self.ls_Kubo(epsilons, Gamma, mfd1)
-            l11[g] = l11_.real
-            l12[g] = l12_.real
-            l12K[g] = l12K_.real
-            l22[g] = l22_.real
-            l12q[g] = l12q_.real
-            l22q[g] = l22q_.real
+        self.L11_boltz.append(K0b / (2 * Gamma))
+        self.L12_boltz.append(K1b / (2 * Gamma))
 
-            l11_boltz[g] = K0b / (2 * Gamma)
-            l22_boltz[g] = K0b / (2 * Gamma)
-            l12_boltz[g] = K1b / (2 * Gamma)
+    def DC_bubble_corr(self, nodes, weights, Gamma, omega0, eps, n_workers=None, n_eps=1.0):
 
-        self.L11.append(helpers.to_scalar_if_single(l11))
-        self.L12.append(helpers.to_scalar_if_single(l12))
-        self.L12K.append(helpers.to_scalar_if_single(l12K))
-        self.L22.append(helpers.to_scalar_if_single(l22))
-        self.L12q.append(helpers.to_scalar_if_single(l12q))
-        self.L22q.append(helpers.to_scalar_if_single(l22q))
+        mu_ = self.mu / Gamma
+        invt = Gamma / self.T
+        
+        results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers, n_eps=n_eps)
+        
+        Chi_jj0 = - results['chi_jj0'].imag
+        dChi_jj  = - results['dchi_jj'].imag
+        Chi_jj = Chi_jj0 + dChi_jj
+        
+        l11_0 = tokovi.find_DC_limit(omega0, Chi_jj0)
+        l11 = tokovi.find_DC_limit(omega0, Chi_jj)
 
-        self.L11_boltz.append(helpers.to_scalar_if_single(l11_boltz))
-        self.L22_boltz.append(helpers.to_scalar_if_single(l22_boltz))
-        self.L12_boltz.append(helpers.to_scalar_if_single(l12_boltz))
+        Chi_jEj0 = - results['chi_jEj0'].imag
+        dChi_jEj = - results['dchi_jEj'].imag
+        Chi_jEj = Chi_jEj0 + dChi_jEj
+        l12_0 = tokovi.find_DC_limit(omega0, Chi_jEj0)
+        l12 = tokovi.find_DC_limit(omega0, Chi_jEj)
 
-    def DC_bubble_corr(self, nodes, weights, Gammas, omega0, eps, n_workers=None, n_eps=1.0):
-        Ngamma = len(Gammas)
+        Chi_jKj0 = - results['chi_jKj0'].imag
+        dChi_jKj = - results['dchi_jKj'].imag
+        Chi_jKj = Chi_jKj0 + dChi_jKj
+        l12K_0 = tokovi.find_DC_limit(omega0, Chi_jKj0)
+        l12K = tokovi.find_DC_limit(omega0, Chi_jKj)
+        
+        Chi_matj0 = - results['chi_matj0'].imag
+        dChi_matj = - results['dchi_matj'].imag
+        Chi_matj = Chi_matj0 + dChi_matj
+        if np.max(np.abs(Chi_matj0)) < 1e-14:
+            l12q_0 = 0.0
+        else:
+            l12q_0 = tokovi.find_DC_limit(omega0, Chi_matj0)
+        if np.max(np.abs(Chi_matj)) < 1e-14:
+            l12q = 0.0
+        else:
+            l12q = tokovi.find_DC_limit(omega0, Chi_matj)
 
-        l11_0 = np.zeros(Ngamma)
-        l12_0 = np.zeros_like(l11_0)
-        l12K_0 = np.zeros_like(l11_0)
-        l12q_0 = np.zeros_like(l11_0)
+        self.L11_0.append(l11_0)
+        self.L11_corr.append(l11)
 
-        l11 = np.zeros_like(l11_0)
-        l12 = np.zeros_like(l11_0)
-        l12K = np.zeros_like(l11_0)
-        l12q = np.zeros_like(l11_0)
+        self.L12_0.append(l12_0)
+        self.L12_corr.append(l12)
 
-        for g, Gamma in enumerate(Gammas):
-            mu_ = self.mu / Gamma
-            invt = Gamma / self.T
-            
-            results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers, n_eps=n_eps)
-            
-            Chi_jj0 = - results['chi_jj0'].imag
-            dChi_jj  = - results['dchi_jj'].imag
-            Chi_jj = Chi_jj0 + dChi_jj
-            
-            l11_0[g] = tokovi.find_DC_limit(omega0, Chi_jj0)
-            l11[g] = tokovi.find_DC_limit(omega0, Chi_jj)
+        self.L12K_0.append(l12K_0)
+        self.L12K_corr.append(l12K)
 
-            Chi_jEj0 = - results['chi_jEj0'].imag
-            dChi_jEj = - results['dchi_jEj'].imag
-            Chi_jEj = Chi_jEj0 + dChi_jEj
-            l12_0[g] = tokovi.find_DC_limit(omega0, Chi_jEj0)
-            l12[g] = tokovi.find_DC_limit(omega0, Chi_jEj)
-
-            Chi_jKj0 = - results['chi_jKj0'].imag
-            dChi_jKj = - results['dchi_jKj'].imag
-            Chi_jKj = Chi_jKj0 + dChi_jKj
-            l12K_0[g] = tokovi.find_DC_limit(omega0, Chi_jKj0)
-            l12K[g] = tokovi.find_DC_limit(omega0, Chi_jKj)
-            
-            Chi_matj0 = - results['chi_matj0'].imag
-            dChi_matj = - results['dchi_matj'].imag
-            Chi_matj = Chi_matj0 + dChi_matj
-            if np.max(np.abs(Chi_matj0)) < 1e-14:
-                l12q_0[g] = 0.0
-            else:
-                l12q_0[g] = tokovi.find_DC_limit(omega0, Chi_matj0)
-            if np.max(np.abs(Chi_matj)) < 1e-14:
-                l12q[g] = 0.0
-            else:
-                l12q[g] = tokovi.find_DC_limit(omega0, Chi_matj)
-
-        self.L11_0.append(helpers.to_scalar_if_single(l11_0))
-        self.L11_corr.append(helpers.to_scalar_if_single(l11))
-
-        self.L12_0.append(helpers.to_scalar_if_single(l12_0))
-        self.L12_corr.append(helpers.to_scalar_if_single(l12))
-
-        self.L12K_0.append(helpers.to_scalar_if_single(l12K_0))
-        self.L12K_corr.append(helpers.to_scalar_if_single(l12K))
-
-        self.L12q_0.append(helpers.to_scalar_if_single(l12q_0))
-        self.L12q_corr.append(helpers.to_scalar_if_single(l12q))
+        self.L12q_0.append(l12q_0)
+        self.L12q_corr.append(l12q)
 
     def optical_response(self, Gamma=None,
                          include_phonon=False, lam_b=None, om_b=None, lam_c=None, om_c=None, Gamma_ph=None, faktor=1.0):
@@ -667,7 +629,7 @@ class model:
                     "Ts": self.merge(self.Ts),
                     "mean_energies": self.merge(self.mean_energies),
                     "phys_parameters" : np.array(self.phys_parameters),
-                    "Gammas": self.Gammas,
+                    "Gamma": self.Gamma,
                     "include_hartree" : self.include_hartree}
             
             if evaluate_transport_DC:
@@ -702,7 +664,7 @@ class model:
                     "Ts": self.Ts,
                     "mean_energies": self.mean_energies,
                     "phys_parameters" : np.array(self.phys_parameters),
-                    "Gammas": self.Gammas,
+                    "Gamma": self.Gamma,
                     "include_hartree" : self.include_hartree}
             
             if evaluate_transport_DC:
