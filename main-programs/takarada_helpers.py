@@ -10,7 +10,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy import linalg as LA
 from scipy.special import digamma, expit
 import numpy as np
-from scipy.optimize import brentq
 
 ''' this function is called when I create free Hamiltonian and current operators '''
 @njit(cache=True)
@@ -241,7 +240,7 @@ def H_diagonalize(hamiltonian, K, T, mu, Gamma, n_target=1.0):
     # occupation matrices: Fermi-Dirac if Gamma=0, else expression with di-Gamma
     fs = np.zeros((2, 2, Nk))
     if T == 0:
-        if Gamma is None or Gamma == 0:
+        if Gamma == 0:
             occupations, _ = zero_T_filling(energije, n_target)
         else:
             occupations = 0.5 - np.arctan((energije-mu) / Gamma) / np.pi
