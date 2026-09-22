@@ -133,9 +133,7 @@ class model:
         self.L11 = []
         self.L12 = []
         self.L12K = []
-        self.L22 = []
         self.L12q = []
-        self.L22q = []
 
         self.L11_boltz = []
         self.L12_boltz  = []
@@ -388,9 +386,8 @@ class model:
         phi = tokovi.phi_Kubo(self.K, self.current_tilde, self.current_tilde, spektralka, epsilons)
         phiQ = tokovi.phi_Kubo(self.K, self.mat_tilde, self.current_tilde, spektralka, epsilons)
         phiK = tokovi.phi_Kubo(self.K, self.current_tilde, self.currentK_tilde, spektralka, epsilons)
-        phiQ2 = tokovi.phi_Kubo(self.K, self.mat_tilde, self.mat_tilde, spektralka, epsilons)
         if dict_form == None:
-            return phi, phiQ, phiK, phiQ2
+            return phi, phiQ, phiK
         elif dict_form:
             phi_boltz = tokovi.phi_Boltzmann(self.K, self.energije, self.mu, epsilons)
             results = {'phi' : phi,
@@ -401,16 +398,14 @@ class model:
             return results
 
     def ls_Kubo(self, epsilons, Gamma, mfd1):
-        phi, phiQ, phiK, phiQ2 = self.transport_functions(epsilons, Gamma)
+        phi, phiQ, phiK = self.transport_functions(epsilons, Gamma)
 
         l11 = np.pi * tokovi.integral_omega(phi * mfd1, epsilons)
         l12 = np.pi * tokovi.integral_omega(epsilons * phi * mfd1, epsilons)
         l12K = np.pi * tokovi.integral_omega(phiK * mfd1, epsilons)
-        l22 = np.pi * tokovi.integral_omega(epsilons**2 * phi * mfd1, epsilons)
         l12q = np.pi * tokovi.integral_omega(phiQ * mfd1, epsilons)
-        l22q = np.pi * tokovi.integral_omega(phiQ2 * mfd1, epsilons) + 2 * np.pi * tokovi.integral_omega(phiQ * epsilons * mfd1, epsilons)        
 
-        return l11, l12, l12K, l22, l12q, l22q
+        return l11, l12, l12K, l12q
 
     def DC_coefficients(self, eps, Nomega, Gamma):
         K0b, K1b = tokovi.Kn_boltz(self.K, self.energije, self.mu, self.T)
@@ -422,13 +417,11 @@ class model:
             epsilon_max = np.sqrt(np.abs(np.arccosh(1/(eps*4*self.T))) * 2 * self.T)
             epsilons = np.linspace(-epsilon_max, epsilon_max, Nomega, dtype=np.float64)
             mfd1 = -tokovi.fd_1(epsilons, self.T)
-            l11_, l12_, l12K_, l22_, l12q_, l22q_ = self.ls_Kubo(epsilons, Gamma, mfd1)
+            l11_, l12_, l12K_, l12q_ = self.ls_Kubo(epsilons, Gamma, mfd1)
             self.L11.append(l11_.real)
             self.L12.append(l12_.real)
             self.L12K.append(l12K_.real)
-            self.L22.append(l22_.real)
             self.L12q.append(l12q_.real)
-            self.L22q.append(l22q_.real)
 
     def DC_bubble_corr(self, nodes, weights, Gamma, omega0, eps, n_workers=None, n_eps=1.0):
 
@@ -636,12 +629,9 @@ class model:
                 data["L11"] = self.merge(self.L11)
                 data["L12"] = self.merge(self.L12)
                 data["L12K"] = self.merge(self.L12K)
-                data["L22"] = self.merge(self.L22)
                 data["L12q"] = self.merge(self.L12q)
-                data["L22q"] = self.merge(self.L22q)
                 data["L11_boltz"] = self.merge(self.L11_boltz)
                 data["L12_boltz"] = self.merge(self.L12_boltz)
-                data["L22_boltz"] = self.merge(self.L22_boltz)
 
             if evaluate_vertex_DC:
                 data["L11_0"] = self.merge(self.L11_0)
@@ -671,12 +661,9 @@ class model:
                 data["L11"] = self.L11
                 data["L12"] = self.L12
                 data["L12K"] = self.L12K
-                data["L22"] = self.L22
                 data["L12q"] = self.L12q
-                data["L22q"] = self.L22q
                 data["L11_boltz"] = self.L11_boltz
                 data["L12_boltz"] = self.L12_boltz
-                data["L22_boltz"] = self.L22_boltz
 
             if evaluate_vertex_DC:
                 data["L11_0"] =self.L11_0
