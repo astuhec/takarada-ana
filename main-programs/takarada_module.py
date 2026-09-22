@@ -409,8 +409,8 @@ class model:
 
     def DC_coefficients(self, eps, Nomega, Gamma):
         K0b, K1b = tokovi.Kn_boltz(self.K, self.energije, self.mu, self.T)
-        self.L11_boltz.append(K0b / (2 * Gamma))
-        self.L12_boltz.append(K1b / (2 * Gamma))
+        self.L11_boltz.append(K0b / (2 * 1.0)) # should divide by Gamma=1/2Tau, where Tau is from relaxation time approximation!
+        self.L12_boltz.append(K1b / (2 * 1.0)) # should divide by Gamma=1/2Tau, where Tau is from relaxation time approximation!
 
         if Gamma>0.0:
             '''Kubo evaluated only if Gamma>0'''
