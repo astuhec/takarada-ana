@@ -228,7 +228,7 @@ class model:
         max_stop = int(Nbetas // freq_betas)
         stops = [freq_betas*i for i in range(1, max_stop+1)]
 
-        if evaluate_vertex_DC:
+        if evaluate_vertex_DC and Gamma>0.0:
             nodes, weights = roots_legendre(deg)
             
         self.Gamma = Gamma
@@ -280,11 +280,11 @@ class model:
                 self.velocities()
 
                 if evaluate_transport_DC:
-                    ''' DC coefficients: Boltzmann's and Kubo's, evaluating the bubble diagram (coefficients as integrals of transport functions) '''
+                    ''' DC coefficients: Boltzmann's and Kubo's (evaluated only if Gamma>0), evaluating the bubble diagram (coefficients as integrals of transport functions) '''
                     self.DC_coefficients(eps, Nomega, Gamma)
                 
-                if evaluate_vertex_DC:
-                    ''' Kubo's DC coefficients, bubble and corrections '''
+                if evaluate_vertex_DC and self.Gamma!=0.0:
+                    ''' Kubo's DC coefficients, bubble and corrections. evaluated only if Gamma>0 '''
                     self.DC_bubble_corr(nodes, weights, Gamma, omega0, eps2, n_workers=n_workers, n_eps=n_eps)
                         
                 if i > 0:
@@ -413,24 +413,22 @@ class model:
         return l11, l12, l12K, l22, l12q, l22q
 
     def DC_coefficients(self, eps, Nomega, Gamma):
-        epsilon_max = np.sqrt(np.abs(np.arccosh(1/(eps*4*self.T))) * 2 * self.T)
-        epsilons = np.linspace(-epsilon_max, epsilon_max, Nomega, dtype=np.float64)
-
         K0b, K1b = tokovi.Kn_boltz(self.K, self.energije, self.mu, self.T)
-        mfd1 = -tokovi.fd_1(epsilons, self.T)
-
-        l11_, l12_, l12K_, l22_, l12q_, l22q_ = self.ls_Kubo(epsilons, Gamma, mfd1)
-
-
-        self.L11.append(l11_.real)
-        self.L12.append(l12_.real)
-        self.L12K.append(l12K_.real)
-        self.L22.append(l22_.real)
-        self.L12q.append(l12q_.real)
-        self.L22q.append(l22q_.real)
-
         self.L11_boltz.append(K0b / (2 * Gamma))
         self.L12_boltz.append(K1b / (2 * Gamma))
+
+        if Gamma>0.0:
+            '''Kubo evaluated only if Gamma>0'''
+            epsilon_max = np.sqrt(np.abs(np.arccosh(1/(eps*4*self.T))) * 2 * self.T)
+            epsilons = np.linspace(-epsilon_max, epsilon_max, Nomega, dtype=np.float64)
+            mfd1 = -tokovi.fd_1(epsilons, self.T)
+            l11_, l12_, l12K_, l22_, l12q_, l22q_ = self.ls_Kubo(epsilons, Gamma, mfd1)
+            self.L11.append(l11_.real)
+            self.L12.append(l12_.real)
+            self.L12K.append(l12K_.real)
+            self.L22.append(l22_.real)
+            self.L12q.append(l12q_.real)
+            self.L22q.append(l22q_.real)
 
     def DC_bubble_corr(self, nodes, weights, Gamma, omega0, eps, n_workers=None, n_eps=1.0):
 
