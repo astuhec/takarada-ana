@@ -35,6 +35,7 @@ class model:
             "Vb": Vb,
             "Vc": Vc,
             "delta": delta,
+            "Gamma":Gamma
         }
 
         phys_parameters = config.get("phys_parameters")
