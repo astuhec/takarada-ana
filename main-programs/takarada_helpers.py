@@ -11,7 +11,6 @@ from scipy import linalg as LA
 from scipy.special import digamma, expit
 import numpy as np
 from scipy.optimize import brentq
-from scipy.special import logsumexp
 
 ''' this function is called when I create free Hamiltonian and current operators '''
 @njit(cache=True)
@@ -202,9 +201,6 @@ def fd(eps, mu, T):
 
 ''' diagonalization of the hamiltonian '''
 def zero_T_filling(energije, n_target):
-    """Fill the lowest states, sharing partial filling across degenerate states."""
-    if not np.isfinite(n_target) or not 0 < n_target < 2:
-        raise ValueError("n_target must be strictly between 0 and 2")
     levels = np.sort(energije.ravel())
     count = n_target * energije.shape[-1]
     nearest = round(count)
@@ -222,33 +218,27 @@ def zero_T_filling(energije, n_target):
     return occupations, mu
 
 def H_diagonalize(hamiltonian, K, T, mu, Gamma, n_target=1.0):
-    Gamma = 0.0 if Gamma is None else float(Gamma)
-    if not np.isfinite(Gamma) or Gamma < 0:
-        raise ValueError("Gamma must be finite and nonnegative")
-    if not np.isfinite(T) or T < 0:
-        raise ValueError("T must be finite and nonnegative")
     Nk = len(K)
-
-    # ── batch diagonalize unique k-points: i = 0, 1, ..., Nk//2 ──────
+    # batch diagonalize unique k-points: i = 0, 1, ..., Nk//2
+    # corresponding to                   k=-pi/a, ..., 0
     H_batch = hamiltonian.transpose(2, 0, 1)
-    n_unique = Nk // 2 + 1
+    n_unique = Nk//2 + 1
 
     en_batch, v_batch = np.linalg.eigh(H_batch[:n_unique])  # (n_unique, 2), (n_unique, 2, 2)
 
-    # ── Fill positive/unique half ──────────────────────────────────────
+    # Fill positive/unique half
     energije = np.zeros((2, Nk))
     vecs     = np.zeros((2, 2, Nk), dtype=np.complex128)
 
-    energije[:, :n_unique] = en_batch.T                     # (2, n_unique)
-    vecs[:, :, :n_unique]  = v_batch.transpose(1, 2, 0)     # (2, 2, n_unique)
+    energije[:,:n_unique] = en_batch.T                     # (2, n_unique)
+    vecs[:,:,:n_unique]  = v_batch.transpose(1, 2, 0)     # (2, 2, n_unique)
 
-    # ── Fill negative half by conjugate symmetry: i -> -i ─────────────
+    # ── Fill other half of BZ by conjugate symmetry: i -> -i
     # indices 1..Nk//2-1 map to -1..-( Nk//2-1), i.e. Nk-1..Nk//2+1
-    if Nk // 2 - 1 > 0:
-        energije[:, Nk//2+1:] = energije[:, 1:Nk//2][:, ::-1]
-        vecs[:, :, Nk//2+1:]  = vecs[:, :, 1:Nk//2][:, :, ::-1].conj()
+    energije[:, Nk//2+1:] = energije[:, 1:Nk//2][:, ::-1]
+    vecs[:, :, Nk//2+1:]  = vecs[:, :, 1:Nk//2][:, :, ::-1].conj()
 
-    # ── Fermi-Dirac occupation matrices ───────────────────────────────
+    # occupation matrices: Fermi-Dirac if Gamma=0, else expression with di-Gamma
     fs = np.zeros((2, 2, Nk))
     if T == 0:
         if Gamma is None or Gamma == 0:
@@ -257,15 +247,15 @@ def H_diagonalize(hamiltonian, K, T, mu, Gamma, n_target=1.0):
             occupations = 0.5 - np.arctan((energije-mu) / Gamma) / np.pi
         fs[0, 0, :] = occupations[0]
         fs[1, 1, :] = occupations[1]
-    elif Gamma == 0:
-        fs[0, 0, :] = expit(-(energije[0] - mu) / T)
-        fs[1, 1, :] = expit(-(energije[1] - mu) / T)
     else:
-        z = 0.5 + (Gamma + 1j*(energije-mu)) / (2*np.pi*T)
-        occupations = 0.5 - np.imag(digamma(z)) / np.pi
-        fs[0, 0, :] = occupations[0]#fd(energije[0, :], mu, T)
-        fs[1, 1, :] = occupations[1]#fd(energije[1, :], mu, T)
-
+        if Gamma == 0:
+            fs[0,0,:] = expit(-(energije[0] - mu) / T)
+            fs[1,1,:] = expit(-(energije[1] - mu) / T)
+        else:
+            z = 0.5 + (Gamma + 1j*(energije-mu)) / (2*np.pi*T)
+            occupations = 0.5 - np.imag(digamma(z)) / np.pi
+            fs[0,0,:] = occupations[0]
+            fs[1,1,:] = occupations[1]
     return energije, vecs, fs
 
 ''' a single iteration in the self-consistency equation. rho --> rho_new  '''
@@ -278,25 +268,21 @@ def F(hamiltonian, rho, K, T, mu, Gamma, n_target=1.0):
 def zasedenost(rho):
     return (np.sum(np.diag(np.einsum('ijk->ij', rho)))/(np.prod(rho.shape[-1]))).real
 
-''' occupation with broadened spectral functions '''
-@njit(cache=True)
-def fermi(x,beta):
-    return 0.5 * (1.0 - np.tanh(0.5*beta*x))
-
-def zasedenost_Gamma(energije, mu, Gamma, beta):
+def zasedenost_Gamma(energije, mu, Gamma, T):
     # z is the argument of digamma function
     Nk = energije.shape[1]
-    z = 0.5 + beta/(2.0*np.pi) * (Gamma + 1j*(energije - mu))
-    occ = 0.5 - np.imag(digamma(z))/np.pi
+    if T>0.0:
+        z = 0.5 + 1/(2.0*np.pi*T) * (Gamma + 1j*(energije - mu))
+        occ = 0.5 - np.imag(digamma(z))/np.pi
+    elif T==0.0:
+        occ = 0.5 - 1/np.pi * np.arctan((energije - mu) / Gamma)
     return np.sum(occ) / Nk
 
-def zasedenost_Gamma_lowT(energije, mu, Gamma, beta):
+def zasedenost_Gamma_lowT(energije, mu, Gamma, T):
     Nk = energije.shape[1]
-    d = energije - mu
-    r2 = Gamma**2 + d**2
-    occ0 = 0.5 - np.arctan(d / Gamma) / np.pi
-    occ2 = np.pi / (3.0 * beta**2)* Gamma * d / r2**2
-    return np.sum(occ0 + occ2) / Nk
+    occ0 = zasedenost_Gamma(energije, mu, Gamma, 0.0)
+    occ_corr = np.pi / (3.0 * (1/T)**2)* Gamma * (energije - mu) / (Gamma**2 + (energije - mu)**2)**2
+    return occ0 + np.sum(occ_corr) / Nk
 
 ''' various functions for converging the self-consistnecy equation '''
 def Rho_next(hk0, rho, K, T, mu, Vb, Vc, eps0,
@@ -314,31 +300,28 @@ def Rho_next(hk0, rho, K, T, mu, Vb, Vc, eps0,
 
 ''' functions for determining chemical potential at the target filling '''
 def f_newmu(mu, hk0, rho, K, T, Vb, Vc, eps0,
-            epsilon_threshold, N_epsilon, maxiter, include_hartree, mix=0.50, n_target=1.0, Gamma=None):
-    rhonew, _, energies, _, _, n = Rho_next(
+            epsilon_threshold, N_epsilon, maxiter, include_hartree, Gamma, mix=0.50, n_target=1.0):
+    rhonew, _, energies, _, _, _ = Rho_next(
         hk0, rho, K, T, mu, Vb, Vc, eps0, epsilon_threshold,
         N_epsilon, maxiter, include_hartree, Gamma, mix, n_target=n_target)
-    if Gamma is not None and Gamma > 0:
-        return zasedenost_Gamma(energies, mu, Gamma, 1 / T) - n_target
-    elif Gamma == 0.0:
-        return zasedenost(rhonew) - n_target
-    if n_target == 1.0 and T > 0:
-        # n - 1 = upper-band electrons - lower-band holes. Evaluate
-        # their logarithms directly: subtracting from a filled band loses
-        # the exponentially small hole density in an insulator.
+    if n_target==1.0 and Gamma==0.0 and T>0:
         log_electrons = logsumexp(-np.logaddexp(0.0, (energies[1] - mu) / T))
         log_holes = logsumexp(-np.logaddexp(0.0, (mu - energies[0]) / T))
         return log_electrons - log_holes
-    return n - n_target
+    else:
+        if Gamma > 0:
+            return zasedenost_Gamma(energies, mu, Gamma, T) - n_target
+        elif Gamma == 0.0:
+            return zasedenost(rhonew) - n_target
 
 def find_bracket(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
-                 epsilon_threshold, N_epsilon, maxiter, include_hartree, mix,
-                 max_expand=20, expand_factor=2.0, n_target=1.0, Gamma=None):
+                 epsilon_threshold, N_epsilon, maxiter, include_hartree, Gamma, mix,
+                 max_expand=20, expand_factor=2.0, n_target=1.0):
     """
     Expand [mu1, mu2] outward until f(mu1) and f(mu2) have opposite signs.
     """
     args = (hk0, rho, K, T, Vb, Vc, eps0,
-            epsilon_threshold, N_epsilon, maxiter, include_hartree, mix, n_target, Gamma)
+            epsilon_threshold, N_epsilon, maxiter, include_hartree, Gamma, mix, n_target)
     
     f1 = f_newmu(mu1, *args)
     f2 = f_newmu(mu2, *args)
@@ -363,102 +346,19 @@ def find_bracket(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
         f"Last: mu1={mu1:.4f}, f(mu1)={f1:.4f}, mu2={mu2:.4f}, f(mu2)={f2:.4f}"
     )
 
-def NewMu(rho, K, hk0, Vb, Vc, T, mu, dmu, maxiter, epsilon_threshold, eps_last, Gamma, mix, mix2, mix3, n_pass, max_trials, faktor1=0.001, include_hartree=True, n_target=1.0):
-    _, err_a, _, _, _, n_a = Rho_next(hk0, rho, K, T, mu, Vb, Vc, 0.0, epsilon_threshold, 0, maxiter, include_hartree, Gamma, mix)
-    _, err_b, _, _, _, n_b = Rho_next(hk0, rho, K, T, mu + dmu, Vb, Vc, 0.0, epsilon_threshold, 0, maxiter, include_hartree, Gamma, mix)
-
-    chi = (n_b - n_a)/dmu
-
-    if abs(chi) < 1e-5:
-        step_direction = np.sign(n_a - n_target)
-        mu = mu - 0.1 * dmu * step_direction
-    elif chi != 0:
-        mu = mu - mix2 * (n_a - n_target)/np.abs(chi)
-
-    if np.abs(chi) > 0:
-        faktor = (n_a - n_target)/chi * mix3
-    else:
-        faktor = faktor1
-    if chi >= 0:
-        if n_a >= n_target:
-            sign = -1
-        elif n_a < n_target: sign = +1
-    elif chi < 0:
-        if n_a >= n_target: sign = +1
-        elif n_a < n_target: sign = -1
-    
-    pogoj = False
-    steps = 0
-    enough = False
-
-    sgns = np.ones(2) * np.sign(n_a - n_target)
-    ns = np.array([0, n_a])
-    mus = [0.0, mu]
-
-    while sgns[0] == sgns[1]:
-        if np.abs(n_a - n_target) < n_pass and err_a < eps_last:
-            enough = True
-            break
-        _, err_b, _, _, _, n_b = Rho_next(hk0, rho, K, T, mu + faktor*steps*sign, Vb, Vc, 0.0, epsilon_threshold, 0, maxiter, include_hartree, Gamma, mix)
-
-        ns[0] = n_b
-        mus[0] = mu + faktor*steps*sign
-        sgns[1] = np.sign(n_b - n_target)
-        if sgns[0] != sgns[1]: break
-        if n_b < n_target and n_b < ns[1]:
-            sign *= -1
-        if n_b > n_target and n_b > ns[1]:
-            sign *= -1
-        ns = np.roll(ns, 1)
-        mus = np.roll(mus, 1)
-        sgns[1] = np.sign(n_b - n_target)
-        steps +=1
-        if np.abs(n_b - n_target) < n_pass and err_b < eps_last:
-            enough = True
-            mu_mid = mu + faktor*steps*sign
-            break
-        
-    mus = np.sort(np.array([mu + faktor*steps*sign, mu + faktor*(steps-1)*sign]))
-    ns = np.sort(np.array(ns))
-
-    trials = 0
-    while pogoj == False:
-        mu_mid = (mus[0] + mus[1])/2
-        if enough == True:
-            break   
-        n_mid = Rho_next(hk0, rho, K, T, mu_mid, Vb, Vc, 0.0, epsilon_threshold, 0, maxiter, include_hartree, Gamma, mix)[-1]
-        if n_mid > n_target: mus[1] = mu_mid
-        elif n_mid < n_target: mus[0] = mu_mid
-        if np.abs(n_mid - n_target) < n_pass:
-            break
-        trials += 1 
-        if trials > max_trials:
-            break
-    rho, err, energije, vecs, fs, n = Rho_next(hk0, rho, K, T, mu_mid, Vb, Vc, 0.0, epsilon_threshold, 0, maxiter, include_hartree, Gamma, mix)
-    return rho, err, energije, vecs, fs, n, mu_mid
-
-def NewMu2(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
+def NewMu(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
              epsilon_threshold, N_epsilon, maxiter, include_hartree, Gamma, mix=0.5, xtol=1e-4, rtol=1e-4, maxiterbrentq=50, n_target=1.0):
-    if Gamma is not None and (not np.isfinite(Gamma) or Gamma < 0):
-        raise ValueError("Gamma must be finite and nonnegative")
-    if not np.isfinite(n_target) or not 0 < n_target < 2:
-        raise ValueError("n_target must be strictly between 0 and 2")
-    if T <= 0:
-        raise ValueError("NewMu2 requires T > 0; use fixed-filling Rho_next for T == 0")
-    # Auto-fix bracket if needed
     try:
         mu1, mu2 = find_bracket(mu1, mu2, hk0, rho, K, T, Vb, Vc, eps0,
-                                epsilon_threshold, N_epsilon, maxiter, include_hartree, mix, n_target=n_target, Gamma=Gamma)
+                                epsilon_threshold, N_epsilon, maxiter, include_hartree, Gamma, mix, n_target=n_target)
     except ValueError as e:
         print(f"Warning: {e}")
         raise
     mu_star = brentq(f_newmu, mu1, mu2, args=(hk0, rho, K, T, Vb, Vc, eps0,
-                                              epsilon_threshold, N_epsilon, maxiter, include_hartree, mix, n_target, Gamma),
+                                              epsilon_threshold, N_epsilon, maxiter, include_hartree, Gamma, mix, n_target),
                      xtol=xtol, rtol=rtol, maxiter=maxiterbrentq)
     rho_final, err, energije, vecs, fs, n = Rho_next(hk0, rho, K, T, mu_star, Vb, Vc, eps0, epsilon_threshold, N_epsilon,
                                                           maxiter, include_hartree, Gamma, mix=mix, n_target=n_target)
-    if Gamma is not None and Gamma > 0:
-        n = zasedenost_Gamma(energije, mu_star, Gamma, 1 / T)
     return mu_star, rho_final, err, energije, vecs, fs, n
 
 def ground_state_fixed_filling(hk0, rho, K, mu, Vb, Vc, eps0,
@@ -466,11 +366,6 @@ def ground_state_fixed_filling(hk0, rho, K, mu, Vb, Vc, eps0,
                                include_hartree, Gamma, n_target=1.0,
                                mazza=None, mix=0.5):
     """Converge the zero-temperature density and chemical potential together."""
-    if not np.isfinite(n_target) or not 0 < n_target < 2:
-        raise ValueError("n_target must be strictly between 0 and 2")
-    Gamma = 0.0 if Gamma is None else Gamma
-    if not np.isfinite(Gamma) or Gamma < 0:
-        raise ValueError("Gamma must be finite and nonnegative")
 
     def solve(trial_mu):
         result = Rho_next(
@@ -503,35 +398,28 @@ def ground_state_fixed_filling(hk0, rho, K, mu, Vb, Vc, eps0,
         raise RuntimeError("Ground-state filling did not converge to n_target")
     return (mu, *result)
 
-def mu_fixed_bands(energije, T, Gamma=None, n_target=1.0):
-    Gamma = 0.0 if Gamma is None else float(Gamma)
-    if not np.isfinite(Gamma) or Gamma < 0:
-        raise ValueError("Gamma must be finite and nonnegative")
-    if not np.isfinite(n_target) or not 0 < n_target < 2:
-        raise ValueError("n_target must be between 0 and 2")
-    if not np.isfinite(T) or T < 0:
-        raise ValueError("T must be finite and nonnegative")
+def mu_fixed_bands(energije, T, Gamma, n_target=1.0):
     if T == 0 and Gamma == 0:
         return zero_T_filling(energije, n_target)[1]
     Nk = energije.shape[-1]
 
     def residual(mu):
         if T == 0:
-            return (0.5 - np.arctan((energije - mu) / Gamma) / np.pi).sum() / Nk - n_target
+            return zasedenost_Gamma(energije, mu, Gamma, T) - n_target
         if n_target == 1.0 and Gamma == 0:
             log_e = logsumexp(-np.logaddexp(0.0, (energije[1] - mu) / T))
             log_h = logsumexp(-np.logaddexp(0.0, (mu - energije[0]) / T))
             return log_e - log_h
         if Gamma == 0:
             return expit(-(energije - mu) / T).sum() / Nk - n_target
-        return zasedenost_Gamma(energije, mu, Gamma, 1 / T) - n_target
+        return zasedenost_Gamma(energije, mu, Gamma, T) - n_target
 
     width = max(float(np.ptp(energije)), T, Gamma, 1e-6)
     for _ in range(60):
         lo, hi = energije.min() - width, energije.max() + width
         if residual(lo) <= 0 <= residual(hi):
             return brentq(residual, lo, hi, xtol=1e-12, rtol=1e-12)
-        width *= 2
+        width *= 2.0
     raise RuntimeError("Could not bracket the fixed-band chemical potential")
 
 ''' expectation value of Hamiltonian. I need this for specific heat and entropy '''
@@ -557,14 +445,14 @@ def energy_average(K, rho, phys_parameters, energije, mu, T):
     return en.real / Nk
 
 ''' density of states '''
-def DoS(K, energije, epsilons, mu, tok_tilde, faktor, shape='Gaussian', Gamma=None):
+def DoS(K, energije, epsilons, mu, tok_tilde, faktor, Gamma, shape='Gaussian'):
     Nk = len(K)
     v_max = np.max(np.abs(tok_tilde))
     sigma = np.sqrt(v_max * (epsilons[1] - epsilons[0]) * (K[1] - K[0])) * faktor
     dos = np.zeros((2, len(epsilons)))
     for k in prange(Nk):
         for alpha in range(2):
-            if Gamma==None:
+            if Gamma==0:
                 dos[alpha] += delta_approximation(epsilons - energije[alpha,k] + mu, sigma, shape) 
             else:
                 dos[alpha] += 1/np.pi * Gamma / ((epsilons - energije[alpha,k])**2 + Gamma**2)

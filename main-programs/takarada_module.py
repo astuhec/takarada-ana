@@ -173,7 +173,7 @@ class model:
 
     def next_T(self, maxbrentq=50, mu_initial=None) -> None:
         if mu_initial==None:
-            mu, rho, err, energije, vecs, _, n = helpers.NewMu2(self.mu - self.dmu, self.mu + self.dmu, self.hk0, self.rho, self.K, self.T, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, self.Gamma, mix=0.5, xtol=self.n_pass, rtol=self.n_pass, maxiterbrentq=maxbrentq, n_target=self.n_target)
+            mu, rho, err, energije, vecs, _, n = helpers.NewMu(self.mu - self.dmu, self.mu + self.dmu, self.hk0, self.rho, self.K, self.T, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, self.Gamma, mix=0.5, xtol=self.n_pass, rtol=self.n_pass, maxiterbrentq=maxbrentq, n_target=self.n_target)
         else:
             rho, err, energije, vecs, _, n = helpers.Rho_next(self.hk0, self.rho, self.K, self.T, mu_initial, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, self.Gamma, mix=0.5, n_target=self.n_target)
             mu = mu_initial
@@ -217,7 +217,7 @@ class model:
         n_eps = params["n_eps"]
 
         maxbrentq = config.get("maxbrentq")
-        Gamma = config.get("Gamma")
+        Gamma = self.Gamma
         eps_ns0 = config.get("eps_ns0")
         betas0 = config.get("beta0") if beta==None else beta
         scale = config.get("scale") if scale==None else scale
