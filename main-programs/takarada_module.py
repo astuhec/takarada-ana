@@ -46,7 +46,6 @@ class model:
         self.phys_parameters = phys_parameters
 
         self.config = config
-        self.Gamma = config.get("Gamma") if Gamma==None else Gamma
 
         self.Nk = config.get("Nk") if Nk==None else Nk
         if verbose:
@@ -82,7 +81,8 @@ class model:
         self.Vb = self.phys_parameters["Vb"]
         self.Vc = self.phys_parameters["Vc"]
         self.delta = self.phys_parameters["delta"]
-        
+        self.Gamma = config.get("Gamma")
+
         self.phys_parameters = [self.b, self.t, self.t_, self.t12, self.epsilon, self.epsilon_, self.Vb, self.Vc, self.delta]
         self.phys_parameters = [float(u) for u in self.phys_parameters]
 
@@ -96,7 +96,8 @@ class model:
                 f'tperp={self.t12}' + '\n' + \
                 f'epsilon={self.epsilon}' + '\n' + \
                 f'V0={self.Vb}' + '\n' + \
-                f'V1={self.Vc}' + '\n' + '=' * 80, flush=True)
+                f'V1={self.Vc}' + '\n' + \
+                f'Gamma={self.Gamma}' + '\n' + '=' * 80, flush=True)
                 
         self.hk0 = helpers.h_k0(self.K, self.phys_parameters, mazza=self.mazza, delta_mazza=self.delta_mazza)
 
