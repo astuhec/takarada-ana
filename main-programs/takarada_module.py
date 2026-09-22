@@ -34,8 +34,7 @@ class model:
             "epsilon_": epsilon_,
             "Vb": Vb,
             "Vc": Vc,
-            "delta": delta,
-            "Gamma":Gamma
+            "delta": delta
         }
 
         phys_parameters = config.get("phys_parameters")
@@ -82,7 +81,7 @@ class model:
         self.Vb = self.phys_parameters["Vb"]
         self.Vc = self.phys_parameters["Vc"]
         self.delta = self.phys_parameters["delta"]
-        self.Gamma = config.get("Gamma")
+        self.Gamma = config.get("Gamma") if Gamma==None else Gamma
 
         self.phys_parameters = [self.b, self.t, self.t_, self.t12, self.epsilon, self.epsilon_, self.Vb, self.Vc, self.delta]
         self.phys_parameters = [float(u) for u in self.phys_parameters]
