@@ -14,7 +14,8 @@ def load_config(path):
 ''' Takarada model '''
 class model:
     def __init__(self, input_file, compute_gap_infty=True, verbose=True, Nk=None,
-                 b=None, t=None, t_=None, t12=None, epsilon=None, epsilon_=None, Vb=None, Vc=None, delta=None, mazza=None, delta_mazza=None, Gamma=None):
+                 b=None, t=None, t_=None, t12=None, epsilon=None, epsilon_=None, Vb=None, Vc=None, delta=None, mazza=None, delta_mazza=None,
+                 Gamma_tr=None, Gamma_oc=None):
 
         self.mazza=mazza
         self.delta_mazza=delta_mazza
@@ -81,7 +82,9 @@ class model:
         self.Vb = self.phys_parameters["Vb"]
         self.Vc = self.phys_parameters["Vc"]
         self.delta = self.phys_parameters["delta"]
-        self.Gamma = config.get("Gamma") if Gamma==None else Gamma
+
+        self.Gamma_tr = config.get("Gamma_tr") if Gamma_tr==None else Gamma_tr
+        self.Gamma_oc = config.get("Gamma_oc") if Gamma_oc==None else Gamma_oc
 
         self.phys_parameters = [self.b, self.t, self.t_, self.t12, self.epsilon, self.epsilon_, self.Vb, self.Vc, self.delta]
         self.phys_parameters = [float(u) for u in self.phys_parameters]
@@ -97,7 +100,8 @@ class model:
                 f'epsilon={self.epsilon}' + '\n' + \
                 f'V0={self.Vb}' + '\n' + \
                 f'V1={self.Vc}' + '\n' + \
-                f'Gamma={self.Gamma}' + '\n' + '=' * 80, flush=True)
+                f'Gamma_tr={self.Gamma_tr}' + '\n' + \
+                f'Gamma_oc={self.Gamma_oc}' + '\n' + '=' * 80, flush=True)
                 
         self.hk0 = helpers.h_k0(self.K, self.phys_parameters, mazza=self.mazza, delta_mazza=self.delta_mazza)
 
@@ -152,7 +156,7 @@ class model:
         mu, rho, err, energije, vecs, fs, n = helpers.ground_state_fixed_filling(
             self.hk0, rho0, self.K, self.mu, self.Vb, self.Vc, self.eps0,
             self.epsilon_threshold, self.N_epsilon, self.maxiter,
-            self.include_hartree, self.Gamma, n_target=self.n_target,
+            self.include_hartree, self.Gamma_oc, n_target=self.n_target,
             mazza=self.mazza, mix=0.5)
         self.rho = rho
         self.energije = energije
@@ -172,9 +176,9 @@ class model:
 
     def next_T(self, maxbrentq=50, mu_initial=None) -> None:
         if mu_initial==None:
-            mu, rho, err, energije, vecs, _, n = helpers.NewMu(self.mu - self.dmu, self.mu + self.dmu, self.hk0, self.rho, self.K, self.T, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, self.Gamma, mix=0.5, xtol=self.n_pass, rtol=self.n_pass, maxiterbrentq=maxbrentq, n_target=self.n_target)
+            mu, rho, err, energije, vecs, _, n = helpers.NewMu(self.mu - self.dmu, self.mu + self.dmu, self.hk0, self.rho, self.K, self.T, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, self.Gamma_oc, mix=0.5, xtol=self.n_pass, rtol=self.n_pass, maxiterbrentq=maxbrentq, n_target=self.n_target)
         else:
-            rho, err, energije, vecs, _, n = helpers.Rho_next(self.hk0, self.rho, self.K, self.T, mu_initial, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, self.Gamma, mix=0.5, n_target=self.n_target)
+            rho, err, energije, vecs, _, n = helpers.Rho_next(self.hk0, self.rho, self.K, self.T, mu_initial, self.Vb, self.Vc, self.eps0, self.epsilon_threshold, self.N_epsilon, self.maxiter, self.include_hartree, self.Gamma_oc, mix=0.5, n_target=self.n_target)
             mu = mu_initial
 
         self.rho = rho
@@ -183,7 +187,6 @@ class model:
         self.err = err
         self.n = n
         self.mu = mu
-        #print(self.mu)
         self.delta_b, self.delta_c = helpers.Delta(self.K, self.rho, self.Vb, self.Vc)
 
     def run_Tdependence(self, k=None, n=None,
@@ -216,7 +219,6 @@ class model:
         n_eps = params["n_eps"]
 
         maxbrentq = config.get("maxbrentq")
-        Gamma = self.Gamma
         eps_ns0 = config.get("eps_ns0")
         betas0 = config.get("beta0") if beta==None else beta
         scale = config.get("scale") if scale==None else scale
@@ -226,10 +228,9 @@ class model:
         max_stop = int(Nbetas // freq_betas)
         stops = [freq_betas*i for i in range(1, max_stop+1)]
 
-        if evaluate_vertex_DC and Gamma>0.0:
+        if evaluate_vertex_DC and self.Gamma_tr > 0.0:
             nodes, weights = roots_legendre(deg)
             
-        self.Gamma = Gamma
         print('started', flush=True)
         for i, beta in enumerate(betas):
             eps_ns = max(self.errors) if len(self.errors) > 0 else eps_ns0
@@ -279,11 +280,11 @@ class model:
 
                 if evaluate_transport_DC:
                     ''' DC coefficients: Boltzmann's and Kubo's (evaluated only if Gamma>0), evaluating the bubble diagram (coefficients as integrals of transport functions) '''
-                    self.DC_coefficients(eps, Nomega, Gamma)
+                    self.DC_coefficients(eps, Nomega, self.Gamma_tr)
                 
-                if evaluate_vertex_DC and self.Gamma!=0.0:
+                if evaluate_vertex_DC and self.Gamma_tr!=0.0:
                     ''' Kubo's DC coefficients, bubble and corrections. evaluated only if Gamma>0 '''
-                    self.DC_bubble_corr(nodes, weights, Gamma, omega0, eps2, n_workers=n_workers, n_eps=n_eps)
+                    self.DC_bubble_corr(nodes, weights, self.Gamma_tr, omega0, eps2, n_workers=n_workers, n_eps=n_eps)
                         
                 if i > 0:
                     self.rho = rho_save
@@ -622,7 +623,8 @@ class model:
                     "Ts": self.merge(self.Ts),
                     "mean_energies": self.merge(self.mean_energies),
                     "phys_parameters" : np.array(self.phys_parameters),
-                    "Gamma": self.Gamma,
+                    "Gamma_tr": self.Gamma_tr,
+                    "Gamma_oc" : self.Gamma_oc,
                     "include_hartree" : self.include_hartree}
             
             if evaluate_transport_DC:
@@ -654,7 +656,8 @@ class model:
                     "Ts": self.Ts,
                     "mean_energies": self.mean_energies,
                     "phys_parameters" : np.array(self.phys_parameters),
-                    "Gamma": self.Gamma,
+                    "Gamma_tr": self.Gamma_tr,
+                    "Gamma_oc": self.Gamma_oc,
                     "include_hartree" : self.include_hartree}
             
             if evaluate_transport_DC:
