@@ -106,8 +106,8 @@ class model:
         self.hk0 = helpers.h_k0(self.K, self.phys_parameters, mazza=self.mazza, delta_mazza=self.delta_mazza)
 
         if compute_gap_infty:
-            self.energy_infty, self.mu_infty, self.gap_infty = Gap_infty(input_file, self.parameters, self.include_hartree,
-                                                                         b=self.b, t=self.t, t_=self.t_, t12=self.t12, epsilon=self.epsilon, epsilon_=self.epsilon_, Vb=self.Vb, Vc=self.Vc, delta=self.delta)
+            self.energy_infty, self.mu_infty, self.gap_infty = Gap_infty(input_file, self.parameters, self.include_hartree,b=self.b, t=self.t, t_=self.t_, t12=self.t12,epsilon=self.epsilon, epsilon_=self.epsilon_,Vb=self.Vb, Vc=self.Vc, delta=self.delta,Gamma_tr=self.Gamma_tr, Gamma_oc=self.Gamma_oc,
+)
         
         ''' Find ground state '''
         self.GS()
@@ -681,18 +681,22 @@ class model:
         return data
     
 def Gap_infty(input_file, parameters, include_hartree,
-              b=None, t=None, t_=None, t12=None, epsilon=None, epsilon_=None, Vb=None, Vc=None, delta=None):
-    new_parameters1 = parameters.copy()
-    new_parameters1["eps0"] = 0.
-    m = model(input_file, compute_gap_infty=False, verbose=False, b=b, t=t, t_=t_, t12=t12, epsilon=epsilon, epsilon_=epsilon_, Vb=Vb, Vc=Vc, delta=delta)
-    m.GS()  # Compute ground state to populate m.rho
-    hk = m.hk0.copy()
-    if include_hartree:
-        hk[0,0,:] += (m.Vb + m.Vc) * np.sum(m.rho[1,1,:]) / m.Nk
-        hk[1,1,:] += (m.Vb + m.Vc) * np.sum(m.rho[0,0,:]) / m.Nk
-    energy_infty = np.zeros((2, m.Nk))
-    energy_infty[0] = hk[0,0].real
-    energy_infty[1] = hk[1,1].real
-    mu_infty = m.mu
-    gap_infty = np.min(hk[1,1]) - np.max(hk[0,0])
-    return energy_infty, mu_infty, gap_infty
+              b=None, t=None, t_=None, t12=None,
+              epsilon=None, epsilon_=None,
+              Vb=None, Vc=None, delta=None,
+              Gamma_tr=None, Gamma_oc=None):
+        new_parameters1 = parameters.copy()
+        new_parameters1["eps0"] = 0.
+        m = model(
+    input_file, compute_gap_infty=False, verbose=False,b=b, t=t, t_=t_, t12=t12,epsilon=epsilon, epsilon_=epsilon_,Vb=Vb, Vc=Vc, delta=delta,Gamma_tr=Gamma_tr, Gamma_oc=Gamma_oc,)
+        m.GS()  # Compute ground state to populate m.rho
+        hk = m.hk0.copy()
+        if include_hartree:
+            hk[0,0,:] += (m.Vb + m.Vc) * np.sum(m.rho[1,1,:]) / m.Nk
+            hk[1,1,:] += (m.Vb + m.Vc) * np.sum(m.rho[0,0,:]) / m.Nk
+        energy_infty = np.zeros((2, m.Nk))
+        energy_infty[0] = hk[0,0].real
+        energy_infty[1] = hk[1,1].real
+        mu_infty = m.mu
+        gap_infty = np.min(hk[1,1]) - np.max(hk[0,0])
+        return energy_infty, mu_infty, gap_infty
