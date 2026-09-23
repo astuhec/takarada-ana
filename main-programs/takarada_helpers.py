@@ -244,17 +244,14 @@ def H_diagonalize(hamiltonian, K, T, mu, Gamma, n_target=1.0):
             occupations, _ = zero_T_filling(energije, n_target)
         else:
             occupations = 0.5 - np.arctan((energije-mu) / Gamma) / np.pi
-        fs[0, 0, :] = occupations[0]
-        fs[1, 1, :] = occupations[1]
     else:
         if Gamma == 0:
-            fs[0,0,:] = expit(-(energije[0] - mu) / T)
-            fs[1,1,:] = expit(-(energije[1] - mu) / T)
+            occupations = expit(-(energije - mu)/T)
         else:
             z = 0.5 + (Gamma + 1j*(energije-mu)) / (2*np.pi*T)
             occupations = 0.5 - np.imag(digamma(z)) / np.pi
-            fs[0,0,:] = occupations[0]
-            fs[1,1,:] = occupations[1]
+    for orb in range(2):
+        fs[orb,orb,:] = occupations[orb]
     return energije, vecs, fs
 
 ''' a single iteration in the self-consistency equation. rho --> rho_new  '''
