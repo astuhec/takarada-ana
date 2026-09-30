@@ -451,7 +451,7 @@ def DoS(K, energije, epsilons, mu, tok_tilde, faktor, Gamma, shape='Gaussian'):
             if Gamma==0:
                 dos[alpha] += delta_approximation(epsilons - energije[alpha,k] + mu, sigma, shape) 
             else:
-                dos[alpha] += 1/np.pi * Gamma / ((epsilons - energije[alpha,k])**2 + Gamma**2)
+                dos[alpha] += 1/np.pi * Gamma / ((epsilons - energije[alpha,k] + mu)**2 + Gamma**2)
     return dos / Nk
 
 ''' approximation for Dirac delta function '''

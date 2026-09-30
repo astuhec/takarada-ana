@@ -279,11 +279,11 @@ class model:
 
                 self.velocities()
 
-                if evaluate_transport_DC:
+                if evaluate_transport_DC and self.Gamma_tr>0.0:
                     ''' DC coefficients: Boltzmann's and Kubo's (evaluated only if Gamma>0), evaluating the bubble diagram (coefficients as integrals of transport functions) '''
                     self.DC_coefficients(eps, Nomega, self.Gamma_tr)
                 
-                if evaluate_vertex_DC and self.Gamma_tr!=0.0:
+                if evaluate_vertex_DC and self.Gamma_tr>0.0:
                     ''' Kubo's DC coefficients, bubble and corrections. evaluated only if Gamma>0 '''
                     self.DC_bubble_corr(nodes, weights, self.Gamma_tr, omega0, eps2, n_workers=n_workers, n_eps=n_eps)
                         
@@ -297,74 +297,6 @@ class model:
 
             msg = f'Progress {np.round(i/len(betas), 3)}. beta={np.round(1/self.T, 1)}, n={self.n:.6f} (target={self.n_target:g}), delta_b={np.round(self.delta_b.real, 5)}, delta_c={np.round(self.delta_c.real, 5)}'
             print(msg, flush=True)
-
-    ''' this is to get lowT dependnece, with the knowledge of mu(T)=(e_c+e_v)/2 + k*T
-        the slope k of the linear term is obtained from mu(T) where it is stable
-        this is done because mu(T) can have discontinuities with run_Tdependence if starting with high beta like 200'''
-    def run_lowT_dependence(self, T_start=None, T_end=None, T_stable=None,
-                        threshold=0.02, window=5, safety=10, window0=20, r2_threshold=0.99):
-        # find interval where mu(T) makes sense (linear) or provide region by putting T_start, T_end, T_stable
-
-        Nbeta_correction = self.config.get("Nbeta_correction")
-        scale_correction = 1/self.config.get("scale")
-        if self.n_target != 1.0:
-            # Doped systems need a fresh fixed-filling solve at each temperature.
-            stable_index = (int(np.argmin(np.abs(np.array(self.Ts) - T_stable)))
-                            if T_stable is not None else int(np.argmin(self.Ts)))
-            self.mu = self.mus[stable_index]
-            self.rho = self.rho_GS.copy()
-            count = len(self.Ts)
-            self.run_Tdependence(beta=1/self.Ts[stable_index],
-                                 Nbeta=Nbeta_correction, scale=scale_correction)
-            self.stable_index = stable_index
-            self.Ncorrection = len(self.Ts) - count
-            return
-        stable_index = np.argmin(np.abs(np.array(self.Ts) - T_stable))  if T_stable is not None else helpers.is_stable(self.Ts, self.mus, threshold, window) + safety
-
-        # find interval above T_stable where mu(T) is linear. this will serve as approximation for mu(T) at T < T_stable
-
-        while T_start==None or T_end==None:
-            T_start, T_end = helpers.find_linear_region(self.Ts, self.mus, stable_index, window0, r2_threshold=r2_threshold)
-            window0 -= 5
-        ind_start = np.argmin(np.abs(np.array(self.Ts) - T_start))
-        ind_end = np.argmin(np.abs(np.array(self.Ts) - T_end))
-        fit_T = np.asarray(self.Ts[ind_start:ind_end + 1])
-        fit_mu = np.asarray(self.mus[ind_start:ind_end + 1])
-        if (len(fit_T) < 2 or np.any(fit_T <= 0)
-                or not np.all(np.isfinite(fit_T))
-                or not np.all(np.isfinite(fit_mu))):
-            raise ValueError("Low-T fitting interval needs at least two finite, positive-temperature samples")
-        # Fit mu(T) = mu_GS + k*T with the known intercept fixed.
-        n = self.mu_GS
-        k = np.dot(fit_T, fit_mu - n) / np.dot(fit_T, fit_T)
-        residual = np.max(np.abs(fit_mu - (n + k * fit_T)))
-        join_error = abs(self.mus[stable_index] - (n + k * self.Ts[stable_index]))
-        if max(residual, join_error) > threshold * np.min(fit_T):
-            print(
-                f"Low-T linear approximation exceeds tolerance "
-                f"(fit residual={residual:.3g}, join error={join_error:.3g}). "
-                "Using the stable fixed-filling solver for the low-T extension.",
-                flush=True)
-            k, n = None, None
-            self.coefficients = None
-        else:
-            self.coefficients = (k, n)
-        
-        beta_initial = 1/self.Ts[stable_index]
-        mu_initial = self.mus[stable_index]
-
-        self.mu = self.mu_GS
-        self.rho = self.rho_GS
-        self.vecs = self.vecs_GS
-        self.energije = self.energije_GS
-        self.delta_b = self.delta_b_GS
-        self.delta_c = self.delta_c_GS
-
-        count = len(self.Ts)
-        self.run_Tdependence(k=k, n=n,
-                             beta=beta_initial, Nbeta=Nbeta_correction, scale=scale_correction)
-        self.stable_index = stable_index
-        self.Ncorrection = len(self.Ts) - count
 
     ''' go back to ground state '''
     def reset(self, mu0) -> None:
@@ -410,20 +342,19 @@ class model:
         return l11, l12, l12K, l12q
 
     def DC_coefficients(self, eps, Nomega, Gamma):
+        tau = 1/(2.0*Gamma)
         K0b, K1b = tokovi.Kn_boltz(self.K, self.energije, self.mu, self.T)
-        self.L11_boltz.append(K0b / (2 * 1.0)) # should divide by Gamma=1/2Tau, where Tau is from relaxation time approximation!
-        self.L12_boltz.append(K1b / (2 * 1.0)) # should divide by Gamma=1/2Tau, where Tau is from relaxation time approximation!
+        self.L11_boltz.append(K0b * tau)
+        self.L12_boltz.append(K1b * tau)
 
-        if Gamma>0.0:
-            '''Kubo evaluated only if Gamma>0'''
-            epsilon_max = np.sqrt(np.abs(np.arccosh(1/(eps*4*self.T))) * 2 * self.T)
-            epsilons = np.linspace(-epsilon_max, epsilon_max, Nomega, dtype=np.float64)
-            mfd1 = -tokovi.fd_1(epsilons, self.T)
-            l11_, l12_, l12K_, l12q_ = self.ls_Kubo(epsilons, Gamma, mfd1)
-            self.L11.append(l11_.real)
-            self.L12.append(l12_.real)
-            self.L12K.append(l12K_.real)
-            self.L12q.append(l12q_.real)
+        epsilon_max = np.sqrt(np.abs(np.arccosh(1/(eps*4*self.T))) * 2 * self.T)
+        epsilons = np.linspace(-epsilon_max, epsilon_max, Nomega, dtype=np.float64)
+        mfd1 = -tokovi.fd_1(epsilons, self.T)
+        l11_, l12_, l12K_, l12q_ = self.ls_Kubo(epsilons, Gamma, mfd1)
+        self.L11.append(l11_.real)
+        self.L12.append(l12_.real)
+        self.L12K.append(l12K_.real)
+        self.L12q.append(l12q_.real)
 
     def DC_bubble_corr(self, nodes, weights, Gamma, omega0, eps, n_workers=None, n_eps=1.0):
 
