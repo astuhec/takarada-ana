@@ -13,10 +13,10 @@ def load_config(path):
             
 ''' Takarada model '''
 class model:
-    def __init__(self, input_file, compute_gap_infty=True, verbose=True, Nk=None,
+    def __init__(self, input_file, compute_gap_infty=False, verbose=True, Nk=None,
                  b=None, t=None, t_=None, t12=None, epsilon=None, epsilon_=None, Vb=None, Vc=None, delta=None, mazza=None, delta_mazza=None,
                  Gamma_tr=None, Gamma_oc=None,
-                 fixedhk0=None, hk0_input=None):
+                 fixedhk0=None, hk0_input=None, rho=None):
 
         self.mazza=mazza
         self.delta_mazza=delta_mazza
@@ -111,7 +111,7 @@ class model:
             self.energy_infty, self.mu_infty, self.gap_infty = Gap_infty(input_file, self.parameters, self.include_hartree,b=self.b, t=self.t, t_=self.t_, t12=self.t12,epsilon=self.epsilon, epsilon_=self.epsilon_,Vb=self.Vb, Vc=self.Vc, delta=self.delta,Gamma_tr=self.Gamma_tr, Gamma_oc=self.Gamma_oc, fixedhk0=fixedhk0, hk0_input=hk0_input)
         
         ''' Find ground state '''
-        self.GS()
+        self.GS(rho=rho)
         if verbose:
             print(f'Found ground state.' + '\n' + 'Order parameter components are:' + '\n' + \
                 f'delta_0 = {np.round(self.delta_b.real, 5)}' + '\n' + \
@@ -152,8 +152,8 @@ class model:
         self.L12q_0 = []
         self.L12q_corr = []
 
-    def GS(self):
-        rho0 = helpers.rho0(self.Nk)
+    def GS(self, rho=None):
+        rho0 = helpers.rho0(self.Nk) if rho is None else rho.copy()
         mu, rho, err, energije, vecs, fs, n = helpers.ground_state_fixed_filling(
             self.hk0, rho0, self.K, self.mu, self.Vb, self.Vc, self.eps0,
             self.epsilon_threshold, self.N_epsilon, self.maxiter,
@@ -260,15 +260,15 @@ class model:
                 self.errors.append(self.err)
                 self.occupations.append(self.n)
 
-                if self.n_target == 1.0:
-                    n0, n1 = helpers.Ns(self.rho, self.energy_infty, self.delta_b, self.delta_c, self.Vb, self.Vc, eps_ns, self.T, self.mu)
-                else:
-                    n0 = np.mean(self.rho[0, 0]).real
-                    n1 = np.mean(self.rho[1, 1]).real
-                self.ns0.append(n0)
-                self.ns1.append(n1)
+                #if self.n_target == 1.0:
+                #    n0, n1 = helpers.Ns(self.rho, self.energy_infty, self.delta_b, self.delta_c, self.Vb, self.Vc, eps_ns, self.T, self.mu)
+                #else:
+                #    n0 = np.mean(self.rho[0, 0]).real
+                #    n1 = np.mean(self.rho[1, 1]).real
+                #self.ns0.append(n0)
+                #self.ns1.append(n1)
 
-                self.gap = helpers.Gap(self.energije, self.delta_bs[-1], self.delta_cs[-1], self.Vb, self.Vc, eps_ns, self.gap_infty)
+                #self.gap = helpers.Gap(self.energije, self.delta_bs[-1], self.delta_cs[-1], self.Vb, self.Vc, eps_ns, self.gap_infty)
                 if self.n_target != 1.0:
                     # Report the current band separation, not the reference GS gap.
                     self.gap = np.min(self.energije[1]) - np.max(self.energije[0])
