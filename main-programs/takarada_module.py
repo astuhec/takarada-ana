@@ -536,80 +536,39 @@ class model:
         print('\n' + 'Finished simulation of perturbation.', flush=True)
         return results
 
-    def merge(self, arr):
-        arr1 = arr[self.stable_index:-self.Ncorrection]
-        arr2 = arr[-self.Ncorrection:][::-1]
-        arr = np.concatenate([arr2, arr1], axis=0)
-        return arr
+    def collect_data(self, evaluate_transport_DC, evaluate_vertex_DC):
+        data = {"delta_bs": self.delta_bs,
+                "delta_cs": self.delta_cs,
+                "ns0": self.ns0,
+                "ns1": self.ns1,
+                "gaps": self.gaps,
+                "mus": self.mus,
+                "errors": self.errors,
+                "occupations": self.occupations,
+                "Ts": self.Ts,
+                "mean_energies": self.mean_energies,
+                "phys_parameters" : np.array(self.phys_parameters),
+                "Gamma_tr": self.Gamma_tr,
+                "Gamma_oc": self.Gamma_oc,
+                "include_hartree" : self.include_hartree}
+        
+        if evaluate_transport_DC:
+            data["L11"] = self.L11
+            data["L12"] = self.L12
+            data["L12K"] = self.L12K
+            data["L12q"] = self.L12q
+            data["L11_boltz"] = self.L11_boltz
+            data["L12_boltz"] = self.L12_boltz
 
-    def collect_data(self, evaluate_transport_DC, evaluate_vertex_DC, merge=True):
-        if merge:
-            data = {"delta_bs": self.merge(self.delta_bs),
-                    "delta_cs": self.merge(self.delta_cs),
-                    "ns0": self.merge(self.ns0),
-                    "ns1": self.merge(self.ns1),
-                    "gaps": self.merge(self.gaps),
-                    "mus": self.merge(self.mus),
-                    "errors": self.merge(self.errors),
-                    "occupations": self.merge(self.occupations),
-                    "Ts": self.merge(self.Ts),
-                    "mean_energies": self.merge(self.mean_energies),
-                    "phys_parameters" : np.array(self.phys_parameters),
-                    "Gamma_tr": self.Gamma_tr,
-                    "Gamma_oc" : self.Gamma_oc,
-                    "include_hartree" : self.include_hartree}
-            
-            if evaluate_transport_DC:
-                data["L11"] = self.merge(self.L11)
-                data["L12"] = self.merge(self.L12)
-                data["L12K"] = self.merge(self.L12K)
-                data["L12q"] = self.merge(self.L12q)
-                data["L11_boltz"] = self.merge(self.L11_boltz)
-                data["L12_boltz"] = self.merge(self.L12_boltz)
-
-            if evaluate_vertex_DC:
-                data["L11_0"] = self.merge(self.L11_0)
-                data["L11_corr"] = self.merge(self.L11_corr)
-                data["L12_0"] = self.merge(self.L12_0)
-                data["L12_corr"] = self.merge(self.L12_corr)
-                data["L12K_0"] = self.merge(self.L12K_0)
-                data["L12K_corr"] = self.merge(self.L12K_corr)
-                data["L12q_0"] = self.merge(self.L12q_0)
-                data["L12q_corr"] = self.merge(self.L12q_corr)
-        else:
-            data = {"delta_bs": self.delta_bs,
-                    "delta_cs": self.delta_cs,
-                    "ns0": self.ns0,
-                    "ns1": self.ns1,
-                    "gaps": self.gaps,
-                    "mus": self.mus,
-                    "errors": self.errors,
-                    "occupations": self.occupations,
-                    "Ts": self.Ts,
-                    "mean_energies": self.mean_energies,
-                    "phys_parameters" : np.array(self.phys_parameters),
-                    "Gamma_tr": self.Gamma_tr,
-                    "Gamma_oc": self.Gamma_oc,
-                    "include_hartree" : self.include_hartree}
-            
-            if evaluate_transport_DC:
-                data["L11"] = self.L11
-                data["L12"] = self.L12
-                data["L12K"] = self.L12K
-                data["L12q"] = self.L12q
-                data["L11_boltz"] = self.L11_boltz
-                data["L12_boltz"] = self.L12_boltz
-
-            if evaluate_vertex_DC:
-                data["L11_0"] =self.L11_0
-                data["L11_corr"] = self.L11_corr
-                data["L12_0"] = self.L12_0
-                data["L12_corr"] = self.L12_corr
-                data["L12K_0"] = self.L12K_0
-                data["L12K_corr"] = self.L12K_corr
-                data["L12q_0"] = self.L12q_0
-                data["L12q_corr"] = self.L12q_corr
-            
+        if evaluate_vertex_DC:
+            data["L11_0"] =self.L11_0
+            data["L11_corr"] = self.L11_corr
+            data["L12_0"] = self.L12_0
+            data["L12_corr"] = self.L12_corr
+            data["L12K_0"] = self.L12K_0
+            data["L12K_corr"] = self.L12K_corr
+            data["L12q_0"] = self.L12q_0
+            data["L12q_corr"] = self.L12q_corr
         return data
     
 def Gap_infty(input_file, parameters, include_hartree,
