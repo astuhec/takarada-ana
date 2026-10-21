@@ -191,7 +191,7 @@ class model:
         self.delta_b, self.delta_c = helpers.Delta(self.K, self.rho, self.Vb, self.Vc)
 
     def run_Tdependence(self, k=None, n=None,
-                        beta=None, scale=None, Nbeta=None):
+                        beta=None, scale=None, Nbeta=None, freq_betas=None):
                         
         ''' read input parameter and initialize the system '''
         config = self.config
@@ -224,7 +224,7 @@ class model:
         betas0 = config.get("beta0") if beta==None else beta
         scale = config.get("scale") if scale==None else scale
         Nbetas = config.get("Nbetas") if Nbeta==None else Nbeta
-        freq_betas = config.get("freq_betas")
+        freq_betas = config.get("freq_betas") if freq_betas==None else freq_betas
         betas = betas0 / scale**np.arange(1, Nbetas+1)
         max_stop = int(Nbetas // freq_betas)
         stops = [freq_betas*i for i in range(1, max_stop+1)]
