@@ -136,32 +136,34 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True):
 
         for m, (x_, orb1_, orb2_, V_) in enumerate(geom["interaction"]):
             orb1_, orb2_ = int(orb1_), int(orb2_)
+
+            # first term in square bracket --> t_{alpha beta} * V_{alpha' beta}
             if orb2 == orb2_:
 
                 deltas=1.0
                 if impose_deltas:
                     # check if the delta functions coming from CAR prohibit these MF terms
-                    if orb1==orb1_ and x==x_: deltas=0.0
-                    elif orb1_==orb2 and x_==0: deltas=0.0
+                    if orb1==orb1_ and x==x_: deltas=0.0 # correct
+                    elif orb1_==orb2 and x_==0: deltas=0.0 # correct
 
                 if deltas!=0.0:
                     lega = geom["pos"][orb2] - geom["pos"][orb1_] - x_
 
-                    # ---------- M3 ---------- first term in equation
+                    # ---------- M3 ---------- first term in equation (ell=1 term)
                     M3[orb1,orb2] += -1j * t * V_ * lega * phase_k * n[orb1_] / Nk
 
-                    # ---------- M6 ---------- second term in equation
+                    # ---------- M6 ---------- second term in equation (ell=2 term)
                     suma = np.sum(rho[orb2,orb1,:] * phase_k)
                     M6[orb1_,orb1_] += -1j * t * V_ * lega * suma / Nk
 
-                    # ---------- M4a ---------- fourth term in equation
+                    # ---------- M4a ---------- fourth term in equation (ell=3 term)
                     #g = -1j * V_ * lega * np.conj(phase_k) * phases["int"][m]
                     g_fft = -1j * V_ * lega * g_ffts_M4a1[l,m,:] #np.fft.fft(np.fft.ifftshift(g))
                     gh = np.fft.fftshift(
                             np.fft.ifft(g_fft * rho_fft[(orb1_,orb1)]))
                     M4a[orb1_,orb2] += fk * gh
 
-                    # ---------- M4b ---------- third term in equation
+                    # ---------- M4b ---------- third term in equation (ell=4 term)
                     h = fk * rho[orb2,orb1_,:]
                     h_fft = np.fft.fft(np.fft.ifftshift(h))
                     g_fft = -1j * V_ * lega * g_ffts_M4b1[l,m,:]
@@ -171,31 +173,32 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True):
                     gh = np.fft.fftshift(np.fft.ifft(g_fft * h_fft))
                     M4b[orb1,orb1_] += gh
 
+            # first term in square bracket --> t_{alpha beta} * V_{alpha' alpha}
             if orb1 == orb2_:
                 deltas=1.0
                 if impose_deltas:
                     # check if the delta functions coming from CAR prohibit these MF terms
-                    if orb1==orb1_ and x_==0.0: deltas=0.0
-                    if orb1_==orb2 and x+x_==0.0: deltas=0.0
+                    if orb1==orb1_ and x_==0.0: deltas=0.0 # correct
+                    if orb1_==orb2 and x+x_==0.0: deltas=0.0 # correct
                     
                 if deltas!=0.0:
                     lega = geom["pos"][orb1] - geom["pos"][orb1_] - x_
                     
-                    # ---------- M3 ---------- first term in equation
+                    # ---------- M3 ---------- first term in equation (ell=1 term)
                     M3[orb1,orb2] += +1j * t * V_ * lega * phase_k * n[orb1_] / Nk
 
-                    # ---------- M6 ---------- second term in equation
+                    # ---------- M6 ---------- second term in equation (ell=2 term)
                     suma = np.sum(rho[orb2,orb1,:] * phase_k)
                     M6[orb1_,orb1_] += +1j * t * V_ * lega * suma / Nk
 
-                    # ---------- M4a ---------- fourth term in equation
+                    # ---------- M4a ---------- fourth term in equation (ell=3 term)
                     #g = +1j * V_ * lega * phases["int"][m]
                     g_fft = +1j * V_ * lega * g_ffts_M4a2[l,m,:] #np.fft.fft(np.fft.ifftshift(g))
                     gh = np.fft.fftshift(
                             np.fft.ifft(g_fft * rho_fft[(orb1_,orb1)]))
                     M4a[orb1_,orb2] += fk * gh
 
-                    # ---------- M4b ---------- third term in equation
+                    # ---------- M4b ---------- third term in equation (ell=4 term)
                     #g = +1j * V_ * lega * np.conj(phases["int"][m])
                     g_fft = +1j * V_ * lega * g_ffts_M4b2[l,m,:]#np.fft.fft(np.fft.ifftshift(g))
                     h = fk * rho[orb2,orb1_,:]
