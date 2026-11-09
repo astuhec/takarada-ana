@@ -304,10 +304,15 @@ class model:
         self.mu = mu0
 
     ''' evaluate self-consistent non-local heat current operator, and transform operators into band basis (tilde) '''
-    def velocities(self) -> None:
+    def velocities(self, impose_deltas=False, impose_additional=True) -> None:
         self.current_tilde = tokovi.operator_tilde(self.current, self.vecs)
-        m3, m6, m4a, m4b = tokovi.compute_all_mf_matrices(self.K, self.rho, self.geom, self.phases, self.g_ffts, impose_deltas=False)
+        m3, m6, m4a, m4b = tokovi.compute_all_mf_matrices(self.K, self.rho, self.geom, self.phases, self.g_ffts,
+                                                          impose_additional=impose_additional, impose_deltas=impose_deltas)
         mat = m3 + m6 + m4a + m4b
+        mat1_tilde = tokovi.operator_tilde(m3, self.vecs)
+        mat2_tilde = tokovi.operator_tilde(m6, self.vecs)
+        mat3_tilde = tokovi.operator_tilde(m4a, self.vecs)
+        mat4_tilde = tokovi.operator_tilde(m4b, self.vecs)
         self.mat_tilde = tokovi.operator_tilde(mat, self.vecs)
         self.rhos_tilde = tokovi.operator_tilde(self.rhos, self.vecs)
         hartree_shift0 = (self.Vb + self.Vc) * np.sum(self.rho[1,1]).real / self.Nk

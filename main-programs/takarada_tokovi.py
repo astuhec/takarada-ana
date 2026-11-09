@@ -103,7 +103,7 @@ def G_ffts(phases, Nk):
     return g_ffts_M4a1, g_ffts_M4a2, g_ffts_M4b1, g_ffts_M4b2
 
 ''' I thought imposing deltas by hand is necessary but it doesn't make a change (so impose_deltas=True,False give the same) '''
-def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True):
+def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True, impose_additional=False):
     Nk = len(K)
 
     M3  = np.zeros((2,2,Nk), dtype=np.complex128)
@@ -157,13 +157,21 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True):
                     M6[orb1_,orb1_] += -1j * t * V_ * lega * suma / Nk
 
                     # ---------- M4a ---------- fourth term in equation (ell=3 term)
+                    if impose_additional and orb1==orb1_ and x==x_ and x==0.0:
+                        faktor=0.0
+                    else:
+                        faktor=1.0
                     #g = -1j * V_ * lega * np.conj(phase_k) * phases["int"][m]
                     g_fft = -1j * V_ * lega * g_ffts_M4a1[l,m,:] #np.fft.fft(np.fft.ifftshift(g))
                     gh = np.fft.fftshift(
                             np.fft.ifft(g_fft * rho_fft[(orb1_,orb1)]))
-                    M4a[orb1_,orb2] += fk * gh
+                    M4a[orb1_,orb2] += fk * gh * faktor
 
                     # ---------- M4b ---------- third term in equation (ell=4 term)
+                    if impose_additional and orb1_==orb2 and x_==0.0 and x==0.0:
+                        faktor=0.0
+                    else:
+                        faktor=1.0
                     h = fk * rho[orb2,orb1_,:]
                     h_fft = np.fft.fft(np.fft.ifftshift(h))
                     g_fft = -1j * V_ * lega * g_ffts_M4b1[l,m,:]
@@ -171,7 +179,7 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True):
                     #            -1j * V_ * lega * np.conj(phases["int"][m]) * phases["kin"][l]
                     #        ))
                     gh = np.fft.fftshift(np.fft.ifft(g_fft * h_fft))
-                    M4b[orb1,orb1_] += gh
+                    M4b[orb1,orb1_] += gh * faktor
 
             # first term in square bracket --> t_{alpha beta} * V_{alpha' alpha}
             if orb1 == orb2_:
@@ -192,21 +200,29 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True):
                     M6[orb1_,orb1_] += +1j * t * V_ * lega * suma / Nk
 
                     # ---------- M4a ---------- fourth term in equation (ell=3 term)
+                    if impose_additional and orb1_==orb1 and x_==0.0 and x==0.0:
+                        faktor=0.0
+                    else:
+                        faktor=1.0
                     #g = +1j * V_ * lega * phases["int"][m]
                     g_fft = +1j * V_ * lega * g_ffts_M4a2[l,m,:] #np.fft.fft(np.fft.ifftshift(g))
                     gh = np.fft.fftshift(
                             np.fft.ifft(g_fft * rho_fft[(orb1_,orb1)]))
-                    M4a[orb1_,orb2] += fk * gh
+                    M4a[orb1_,orb2] += fk * gh * faktor
 
                     # ---------- M4b ---------- third term in equation (ell=4 term)
                     #g = +1j * V_ * lega * np.conj(phases["int"][m])
+                    if impose_additional and orb1_==orb2 and x+x_==0.0 and x==0.0:
+                        faktor=0.0
+                    else:
+                        faktor=1.0
                     g_fft = +1j * V_ * lega * g_ffts_M4b2[l,m,:]#np.fft.fft(np.fft.ifftshift(g))
                     h = fk * rho[orb2,orb1_,:]
                     h_fft = np.fft.fft(np.fft.ifftshift(h))
                     gh = np.fft.fftshift(
                                 np.fft.ifft(g_fft * h_fft)
                     )
-                    M4b[orb1,orb1_] += gh
+                    M4b[orb1,orb1_] += gh * faktor
 
     return M3, M6, -M4a, -M4b
 
@@ -380,7 +396,7 @@ def phi_Kubo(K, mat1, mat2, spektralka, epsilons):
     phi = np.zeros(len(epsilons), dtype=np.complex128)
     A = spektralka
 
-    for m in [0, Nk//2]:
+    '''for m in [0, Nk//2]:
         for a in range(2):
             for b in range(2):
                 phi += (mat1[a,b,m] * A[:,b,m] * mat2[b,a,m] * A[:,a,m])
@@ -388,6 +404,13 @@ def phi_Kubo(K, mat1, mat2, spektralka, epsilons):
         for a in range(2):
             for b in range(2):
                 phi += 2 * (mat1[a,b,m] * A[:,b,m] * mat2[b,a,m] * A[:,a,m])
+    '''
+
+    for m in prange(Nk):
+        for a in range(2):
+            for b in range(2):
+                phi += (mat1[a,b,m] * A[:,b,m] * mat2[b,a,m] * A[:,a,m])
+
     return phi / Nk
 
 ''' same as phi_Kubo, but neglecting overlap of spectral function in different bands due to Gamma << gap
