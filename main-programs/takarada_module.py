@@ -313,7 +313,7 @@ class model:
         self.mat2_tilde = tokovi.operator_tilde(m6, self.vecs)
         self.mat3_tilde = tokovi.operator_tilde(m4a, self.vecs)
         self.mat4_tilde = tokovi.operator_tilde(m4b, self.vecs)
-        self.mat_tilde = tokovi.operator_tilde(mat, self.vecs)
+        self.mat_tilde = self.mat2_tilde + self.mat3_tilde + self.mat4_tilde
         self.rhos_tilde = tokovi.operator_tilde(self.rhos, self.vecs)
         hartree_shift0 = (self.Vb + self.Vc) * np.sum(self.rho[1,1]).real / self.Nk
         hartree_shift1 = (self.Vb + self.Vc) * np.sum(self.rho[0,0]).real / self.Nk
@@ -457,7 +457,15 @@ class model:
         print('\n' + 'Finished calculation of RPA responses.', flush=True)
         return results
 
-    def simulate_perturbation(self, do_freeze=None, Gamma_=None, dt=None, t_max=None, add_diagonals=None):
+    def simulate_perturbation(self, do_freeze=None, Gamma_=None, dt=None, t_max=None, add_diagonals=None,
+                              *, impose_deltas=False, impose_additional=True):
+        """Run frozen or self-consistent HF dynamics under a current pulse.
+
+        The interaction-current flags match velocities() by default.
+        With measure_provider='all_three', measurement rows are charge,
+        kinetic heat, and interaction heat current, respectively.
+        Gamma_ controls time-domain dephasing; eta only windows the FFT.
+        """
         print('\n' + '-' * 80 + '\n' + \
               'Started simulation of perturbation.', flush=True)
         params = self.config.get("params_perturbation")
@@ -491,6 +499,12 @@ class model:
         else:
             print("Choose a valid perturbation operator. Currently available : current", flush=True)
         
+        def interaction_current(K, rho, geom, phases, g_ffts):
+            return tokovi.compute_together_mf_matrices(
+                K, rho, geom, phases, g_ffts,
+                impose_deltas=impose_deltas,
+                impose_additional=impose_additional)
+
         if params["measure_provider"] == 'current':
             measure_provider = self.current
         elif params["measure_provider"] == 'kinetic_current':
@@ -500,12 +514,12 @@ class model:
             currentK = tokovi.kinetic_current_provider(self.epsilon, self.epsilon_, self.mu, self.Vb, self.Vc, self.include_hartree)
             measure_provider = [self.current, currentK]
         elif params["measure_provider"] == "current_interaction":
-            measure_provider = [self.current, tokovi.compute_together_mf_matrices]
+            measure_provider = [self.current, interaction_current]
         elif params["measure_provider"] == 'all_three':
             currentK = tokovi.kinetic_current_provider(self.epsilon, self.epsilon_, self.mu, self.Vb, self.Vc, self.include_hartree)
             # Measurement rows: current, kinetic current, interaction current.
             # Keep the two dynamic providers in this order.
-            measure_provider = [self.current, currentK, tokovi.compute_together_mf_matrices]
+            measure_provider = [self.current, currentK, interaction_current]
         else:
             print("Choose a valid measure provider." \
             "Currently available : current, kinetic_current, curent_kinetic_current, current_interaction, all_three", flush=True)

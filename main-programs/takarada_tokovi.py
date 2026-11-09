@@ -103,7 +103,7 @@ def G_ffts(phases, Nk):
     return g_ffts_M4a1, g_ffts_M4a2, g_ffts_M4b1, g_ffts_M4b2
 
 ''' I thought imposing deltas by hand is necessary but it doesn't make a change (so impose_deltas=True,False give the same) '''
-def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True, impose_additional=False):
+def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=False, impose_additional=True):
     Nk = len(K)
 
     M3  = np.zeros((2,2,Nk), dtype=np.complex128)
@@ -226,8 +226,11 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=True, im
 
     return M3, M6, -M4a, -M4b
 
-def compute_together_mf_matrices(K, rho, geom, phases, g_ffts):
-    m1,m2,m3,m4 = compute_all_mf_matrices(K, rho, geom, phases, g_ffts)
+def compute_together_mf_matrices(K, rho, geom, phases, g_ffts,
+                                 impose_deltas=True, impose_additional=False):
+    m1,m2,m3,m4 = compute_all_mf_matrices(
+        K, rho, geom, phases, g_ffts,
+        impose_deltas=impose_deltas, impose_additional=impose_additional)
     return 0.5*(m1 + m2 + m3 + m4)
 
 ''' functions mf_matrix1,2,3,4 give exactly the same as function compute_all_mf_matrices,
@@ -693,8 +696,8 @@ def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
             ops = ops[np.newaxis, ...]
         ops_list.append(ops)
 
-        measure_operators = np.concatenate(ops_list, axis=0)
-        Nop = measure_operators.shape[0]
+    measure_operators = np.concatenate(ops_list, axis=0)
+    Nop = measure_operators.shape[0]
 
     rho0 = np.copy(rho)
     H0 = h_k(K, hk0, rho0, Vb, Vc, 0.0, include_hartree)
