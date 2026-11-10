@@ -308,7 +308,6 @@ class model:
         self.current_tilde = tokovi.operator_tilde(self.current, self.vecs)
         m3, m6, m4a, m4b = tokovi.compute_all_mf_matrices(self.K, self.rho, self.geom, self.phases, self.g_ffts,
                                                           impose_additional=impose_additional, impose_deltas=impose_deltas)
-        mat = m3 + m6 + m4a + m4b
         self.mat1_tilde = tokovi.operator_tilde(m3, self.vecs)
         self.mat2_tilde = tokovi.operator_tilde(m6, self.vecs)
         self.mat3_tilde = tokovi.operator_tilde(m4a, self.vecs)
@@ -412,8 +411,7 @@ class model:
         self.L12q_corr.append(l12q)
 
     def optical_response(self, Gamma=None,
-                         include_phonon=False, lam_b=None, om_b=None, lam_c=None, om_c=None, Gamma_ph=None, faktor=1.0,
-                         exclude_im_rho0y_j=False):
+                         include_phonon=False, lam_b=None, om_b=None, lam_c=None, om_c=None, Gamma_ph=None, faktor=1.0,):
         print('\n' + '-' * 80 + '\n' + \
               'Started calculation of RPA responses.', flush=True)
         params = self.config.get("params_RPA")
@@ -446,13 +444,11 @@ class model:
         invt = Gamma / self.T
         if not include_phonon:
             results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps, faktor=faktor, n_eps=n_eps,
-                                         include_hartree=self.include_hartree,
-                                         exclude_im_rho0y_j=exclude_im_rho0y_j)
+                                         include_hartree=self.include_hartree)
         elif include_phonon:
             results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps,
                                              include_hartree=self.include_hartree, include_phonon=include_phonon, n_eps=n_eps,
-                                             lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=self.Vb, Vc=self.Vc, Gamma_ph=Gamma_ph,faktor=faktor,
-                                             exclude_im_rho0y_j=exclude_im_rho0y_j)
+                                             lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=self.Vb, Vc=self.Vc, Gamma_ph=Gamma_ph,faktor=faktor,)
 
         results["Gamma"] = Gamma
         results["T"] = self.T
