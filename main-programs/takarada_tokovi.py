@@ -926,7 +926,8 @@ def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, mu_, invt, nodes, weights, eps=1e-
     epsilon_max = np.sqrt(np.abs(np.arccosh(1/(eps*4*T))) * 2 * T) / Gamma * n_eps
 
     # Cover spectral poles from both mn and nm channels, plus the Fermi region.
-    centers = np.array([e_mk, e_nk - w, e_nk, e_mk - w, mu_])
+    #centers = np.array([e_mk, e_nk - w, e_nk, e_mk - w, mu_])
+    centers = np.array([e_mk, e_nk - w, e_nk, e_mk - w, mu_, mu_ - w])
     n_centers = len(centers)
 
     # Build, sort, and merge intervals to avoid integrating overlaps twice.
