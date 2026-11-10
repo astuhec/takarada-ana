@@ -227,11 +227,10 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=False, i
     return M3, M6, -M4a, -M4b
 
 def compute_together_mf_matrices(K, rho, geom, phases, g_ffts,
-                                 impose_deltas=True, impose_additional=False):
-    m1,m2,m3,m4 = compute_all_mf_matrices(
-        K, rho, geom, phases, g_ffts,
-        impose_deltas=impose_deltas, impose_additional=impose_additional)
-    return 0.5*(m1*0.0 + m2 + m3 + m4)
+                                 impose_deltas=False, impose_additional=True):
+    m3, m6, m4a, m4b = compute_all_mf_matrices(K, rho, geom, phases, g_ffts,
+                                                        impose_additional=impose_additional, impose_deltas=impose_deltas)
+    return 0.5*(m6 + m4a + m4b)
 
 ''' functions mf_matrix1,2,3,4 give exactly the same as function compute_all_mf_matrices,
 but the latter is more convenient (faster if used for multiple calls) because it uses precomputed elements '''
