@@ -1137,14 +1137,14 @@ def compute_single_om_fused(
         chi_jErho0[i] = chi_UV(Nk, tok_tilde,    rhos_tilde[i], piw_mn, piw_nm)
         chi_matrho0[i] = chi_UV(Nk, mat_tilde, rhos_tilde[i], pi_mn, pi_nm)
 
-    # ── RPA corrections ────────────────────────────────────────────────────────────
+ # ── RPA corrections ────────────────────────────────────────────────────────────
     mat     = I - chi0 @ thetas_diag
-    chi_rpa = LA.solve(mat, chi0)
-    dressed_rhoj = LA.solve(mat, chi_rhoj0)
-    dchi_jj = chi_jrho0 @ thetas_diag @ dressed_rhoj
-    dchi_jKj = chi_jKrho0 @ thetas_diag @ dressed_rhoj
-    dchi_jEj = chi_jErho0 @ thetas_diag @ dressed_rhoj
-    dchi_matj = chi_matrho0 @ thetas_diag @ dressed_rhoj
+    inv     = LA.inv(mat)
+    chi_rpa = inv @ chi0
+    dchi_jj = chi_jrho0 @ thetas_diag @ inv @ chi_rhoj0
+    dchi_jKj = chi_jKrho0 @ thetas_diag @ inv @ chi_rhoj0
+    dchi_jEj = chi_jErho0 @ thetas_diag @ inv @ chi_rhoj0
+    dchi_matj = chi_matrho0 @ thetas_diag @ inv @ chi_rhoj0
 
     return om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jKj0, dchi_jKj, chi_jEj0, dchi_jEj, chi_matj0, dchi_matj, chi_rhoj0
 
