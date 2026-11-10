@@ -458,7 +458,7 @@ class model:
         return results
 
     def simulate_perturbation(self, do_freeze=None, Gamma_=None, dt=None, t_max=None, add_diagonals=None,
-                              *, impose_deltas=False, impose_additional=True):
+                              *, impose_deltas=False, impose_additional=True, remove1=True):
         """Run frozen or self-consistent HF dynamics under a current pulse.
 
         The interaction-current flags match velocities() by default.
@@ -503,7 +503,8 @@ class model:
             return tokovi.compute_together_mf_matrices(
                 K, rho, geom, phases, g_ffts,
                 impose_deltas=impose_deltas,
-                impose_additional=impose_additional)
+                impose_additional=impose_additional,
+                remove1=remove1)
 
         if params["measure_provider"] == 'current':
             measure_provider = self.current

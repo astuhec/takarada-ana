@@ -227,9 +227,11 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=False, i
     return M3, M6, -M4a, -M4b
 
 def compute_together_mf_matrices(K, rho, geom, phases, g_ffts,
-                                 impose_deltas=False, impose_additional=True):
+                                 impose_deltas=False, impose_additional=True, remove1=True):
     m3, m6, m4a, m4b = compute_all_mf_matrices(K, rho, geom, phases, g_ffts,
                                                         impose_additional=impose_additional, impose_deltas=impose_deltas)
+    if remove1:
+        return 0.5*(m6 + m4a + m4b)
     return 0.5*(m3 + m6 + m4a + m4b)
 
 ''' functions mf_matrix1,2,3,4 give exactly the same as function compute_all_mf_matrices,
