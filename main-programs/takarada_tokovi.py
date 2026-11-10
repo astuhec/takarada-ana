@@ -231,7 +231,7 @@ def compute_together_mf_matrices(K, rho, geom, phases, g_ffts,
     m1,m2,m3,m4 = compute_all_mf_matrices(
         K, rho, geom, phases, g_ffts,
         impose_deltas=impose_deltas, impose_additional=impose_additional)
-    return 0.5*(m1 + m2 + m3 + m4)
+    return 0.5*(m1*0.0 + m2 + m3 + m4)
 
 ''' functions mf_matrix1,2,3,4 give exactly the same as function compute_all_mf_matrices,
 but the latter is more convenient (faster if used for multiple calls) because it uses precomputed elements '''
@@ -978,8 +978,25 @@ def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, mu_, invt, nodes, weights, eps=1e-
             pref = e - mu_ + 0.5 * w * faktor
             wi   = weights[i] * half
 
-            f  = 1.0 / (np.exp((e  - mu_) * invt) + 1.0)
-            fw = 1.0 / (np.exp((ew - mu_) * invt) + 1.0)
+            # Evaluate f and its complement independently: avoid overflow
+            # and loss of the small hole population deep below the Fermi level.
+            x = (e - mu_) * invt
+            xw = (ew - mu_) * invt
+            ex = np.exp(-abs(x))
+            exw = np.exp(-abs(xw))
+            if x >= 0.0:
+                f, fc = ex / (1.0 + ex), 1.0 / (1.0 + ex)
+            else:
+                f, fc = 1.0 / (1.0 + ex), ex / (1.0 + ex)
+            if xw >= 0.0:
+                fw, fwc = exw / (1.0 + exw), 1.0 / (1.0 + exw)
+            else:
+                fw, fwc = 1.0 / (1.0 + exw), exw / (1.0 + exw)
+            # Exact Fermi difference, stable for either sign of omega.
+            if w >= 0.0:
+                df = f * fwc * (-np.expm1(-w * invt))
+            else:
+                df = -fw * fc * (-np.expm1(w * invt))
 
             A_mk  = invpi / (dm  * dm  + 1.0)
             A_nk  = invpi / (dn  * dn  + 1.0)
@@ -996,9 +1013,9 @@ def Pi_bubble_tilde(omega, E_mk, E_nk, Gamma, mu_, invt, nodes, weights, eps=1e-
             Gan_i  =  1.0 / (dn  * dn  + 1.0)
 
             mn_r = A_mk * Grnw_r * f + A_nkw * Gam_r * fw
-            mn_i = A_mk * Grnw_i * f + A_nkw * Gam_i * fw
+            mn_i = -np.pi * A_mk * A_nkw * df
             nm_r = A_nk * Grmw_r * f + A_mkw * Gan_r * fw
-            nm_i = A_nk * Grmw_i * f + A_mkw * Gan_i * fw
+            nm_i = -np.pi * A_nk * A_mkw * df
 
             res_mn_r   += wi * mn_r
             res_mn_i   += wi * mn_i
@@ -1076,8 +1093,7 @@ def compute_single_om_fused(
     eps=1e-5,
     include_hartree=True,
     include_phonon=False, n_eps=1.0,
-    lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None, faktor=1.0
-):
+    lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None, faktor=1.0):
     Nop = len(thetas)
 
     if not include_phonon:
@@ -1121,12 +1137,12 @@ def compute_single_om_fused(
 
     # ── RPA corrections ────────────────────────────────────────────────────────────
     mat     = I - chi0 @ thetas_diag
-    inv     = LA.inv(mat)
-    chi_rpa = inv @ chi0
-    dchi_jj = chi_jrho0 @ thetas_diag @ inv @ chi_rhoj0
-    dchi_jKj = chi_jKrho0 @ thetas_diag @ inv @ chi_rhoj0
-    dchi_jEj = chi_jErho0 @ thetas_diag @ inv @ chi_rhoj0
-    dchi_matj = chi_matrho0 @ thetas_diag @ inv @ chi_rhoj0
+    chi_rpa = LA.solve(mat, chi0)
+    dressed_rhoj = LA.solve(mat, chi_rhoj0)
+    dchi_jj = chi_jrho0 @ thetas_diag @ dressed_rhoj
+    dchi_jKj = chi_jKrho0 @ thetas_diag @ dressed_rhoj
+    dchi_jEj = chi_jErho0 @ thetas_diag @ dressed_rhoj
+    dchi_matj = chi_matrho0 @ thetas_diag @ dressed_rhoj
 
     return om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jKj0, dchi_jKj, chi_jEj0, dchi_jEj, chi_matj0, dchi_matj, chi_rhoj0
 
