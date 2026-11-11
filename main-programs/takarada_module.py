@@ -414,7 +414,8 @@ class model:
         self.L12q_corr.append(l12q)
 
     def optical_response(self, Gamma=None,
-                         include_phonon=False, lam_b=None, om_b=None, lam_c=None, om_c=None, Gamma_ph=None, faktor=1.0,):
+                         include_phonon=False, lam_b=None, om_b=None, lam_c=None, om_c=None, Gamma_ph=None, faktor=1.0,
+                         deg=None, eps=None, n_eps=None):
         print('\n' + '-' * 80 + '\n' + \
               'Started calculation of RPA responses.', flush=True)
         params = self.config.get("params_RPA")
@@ -427,11 +428,11 @@ class model:
             if value is not None:
                 params[key] = value
 
-        deg = params["deg"]
+        deg = params["deg"] if deg==None else deg
         Gamma = params["Gamma"]
-        eps = params["eps"]
+        eps = params["eps"] if eps==None else eps
         n_workers = params["n_workers"]
-        n_eps = params["n_eps"]
+        n_eps = params["n_eps"] if n_eps==None else n_eps
 
         omega_low = params["omega_low"]
         omega_high = params["omega_high"]
