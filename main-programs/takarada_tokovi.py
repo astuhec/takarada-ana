@@ -693,7 +693,7 @@ def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
         ops_list.append(np.concatenate(static_ops, axis=0))
 
     for p in dynamic_providers:
-        ops = p(K, rho, geom, phases, g_ffts)
+        ops = p(K, rho, geom, phases, g_ffts, impose_deltas, impose_additional)
         if ops.ndim == 3:
             ops = ops[np.newaxis, ...]
         ops_list.append(ops)
