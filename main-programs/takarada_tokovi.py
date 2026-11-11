@@ -680,7 +680,8 @@ def compile_measure_provider(measure_provider):
 def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
                   perturbation_operator, measure_provider,
                   A0, t0, sigma, Omega, dt, t_max,
-                  do_freeze, Ncorr, tol, geom, phases, g_ffts, add_diagonals=None, fs=None, Gamma=0.0, verbose=True, freq_verbose=50):
+                  do_freeze, Ncorr, tol, geom, phases, g_ffts, add_diagonals=None, fs=None, Gamma=0.0, verbose=True, freq_verbose=50,
+                  impose_deltas=False, impose_additional=True):
     N_points = int(t_max/dt)
     Nk = len(K)
 
@@ -784,7 +785,7 @@ def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
             ops_list.append(np.concatenate(static_ops, axis=0))
 
         for p in dynamic_providers:
-            ops = p(K, rho, geom, phases, g_ffts)
+            ops = p(K, rho, geom, phases, g_ffts, impose_deltas, impose_additional)
             if ops.ndim == 3:
                 ops = ops[np.newaxis, ...]
             ops_list.append(ops)

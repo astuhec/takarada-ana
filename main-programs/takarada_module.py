@@ -537,7 +537,9 @@ class model:
                                                                                        perturbation_operator, measure_provider,
                                                                                        A0, t0, sigma, Omega0, dt, t_max,
                                                                                        do_freeze, Ncorr, tol, self.geom, self.phases, self.g_ffts, Gamma=Gamma_, verbose=verbose, freq_verbose=freq_verbose,
-                                                                                       add_diagonals=add_diagonals, fs=fs)
+                                                                                       add_diagonals=add_diagonals, fs=fs,
+                                                                                       impose_deltas=impose_deltas,
+                                                                                       impose_additional=impose_additional)
         
         pulz = tokovi.A_pulz(times, A0, t0, sigma, Omega0)
         results = {"time" : times,
