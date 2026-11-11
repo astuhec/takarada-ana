@@ -44,7 +44,7 @@ def jK_tok(K, pos, kinetic, epsilon, epsilon_, mu, hartree_shift0, hartree_shift
 
 def kinetic_current_provider(epsilon, epsilon_, mu, Vb, Vc, include_hartree):
     """Build a pulse measurement provider using the instantaneous Hartree shifts."""
-    def provider(K, rho, geom, phases, g_ffts):
+    def provider(K, rho, geom, phases, g_ffts, impose_deltas=False, impose_additional=True):
         shift0 = shift1 = 0.0
         if include_hartree:
             shift0 = (Vb + Vc) * np.sum(rho[1, 1]).real / len(K)
