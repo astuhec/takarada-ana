@@ -502,7 +502,7 @@ class model:
         else:
             print("Choose a valid perturbation operator. Currently available : current", flush=True)
         
-        def interaction_current(K, rho, geom, phases, g_ffts):
+        def interaction_current(K, rho, geom, phases, g_ffts, impose_deltas, impose_additional):
             return tokovi.compute_together_mf_matrices(
                 K, rho, geom, phases, g_ffts,
                 impose_deltas=impose_deltas,
