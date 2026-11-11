@@ -312,7 +312,10 @@ class model:
         self.mat2_tilde = tokovi.operator_tilde(m6, self.vecs)
         self.mat3_tilde = tokovi.operator_tilde(m4a, self.vecs)
         self.mat4_tilde = tokovi.operator_tilde(m4b, self.vecs)
-        self.mat_tilde = self.mat2_tilde + self.mat3_tilde + self.mat4_tilde
+        if impose_additional:
+            self.mat_tilde = self.mat2_tilde + self.mat3_tilde + self.mat4_tilde
+        else:
+            self.mat_tilde = self.mat1_tilde + self.mat2_tilde + self.mat3_tilde + self.mat4_tilde
         self.rhos_tilde = tokovi.operator_tilde(self.rhos, self.vecs)
         hartree_shift0 = (self.Vb + self.Vc) * np.sum(self.rho[1,1]).real / self.Nk
         hartree_shift1 = (self.Vb + self.Vc) * np.sum(self.rho[0,0]).real / self.Nk
@@ -458,7 +461,7 @@ class model:
         return results
 
     def simulate_perturbation(self, do_freeze=None, Gamma_=None, dt=None, t_max=None, add_diagonals=None,
-                              *, impose_deltas=False, impose_additional=True, remove1=True):
+                              *, impose_deltas=False, impose_additional=True):
         """Run frozen or self-consistent HF dynamics under a current pulse.
 
         The interaction-current flags match velocities() by default.
@@ -503,8 +506,7 @@ class model:
             return tokovi.compute_together_mf_matrices(
                 K, rho, geom, phases, g_ffts,
                 impose_deltas=impose_deltas,
-                impose_additional=impose_additional,
-                remove1=remove1)
+                impose_additional=impose_additional)
 
         if params["measure_provider"] == 'current':
             measure_provider = self.current
