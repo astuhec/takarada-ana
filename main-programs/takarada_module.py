@@ -462,14 +462,23 @@ class model:
         return results
 
     def simulate_perturbation(self, do_freeze=None, Gamma_=None, dt=None, t_max=None, add_diagonals=None,
-                              *, impose_deltas=False, impose_additional=True):
+                              *, impose_deltas=False, impose_additional=True,
+                              interaction_current_mode="equilibrium"):
         """Run frozen or self-consistent HF dynamics under a current pulse.
 
         The interaction-current flags match velocities() by default.
         With measure_provider='all_three', measurement rows are charge,
         kinetic heat, and interaction heat current, respectively.
+        interaction_current_mode='equilibrium' measures the fixed full
+        equilibrium vertex used by RPA.  'instantaneous' preserves the
+        nonlinear 0.5*M[rho(t)] measurement.
         Gamma_ controls time-domain dephasing; eta only windows the FFT.
         """
+        valid_interaction_modes = {"equilibrium", "instantaneous"}
+        if interaction_current_mode not in valid_interaction_modes:
+            raise ValueError(
+                "interaction_current_mode must be 'equilibrium' or 'instantaneous'")
+
         print('\n' + '-' * 80 + '\n' + \
               'Started simulation of perturbation.', flush=True)
         params = self.config.get("params_perturbation")
@@ -503,11 +512,24 @@ class model:
         else:
             print("Choose a valid perturbation operator. Currently available : current", flush=True)
         
-        def interaction_current(K, rho, geom, phases, g_ffts, impose_deltas, impose_additional):
-            return tokovi.compute_together_mf_matrices(
-                K, rho, geom, phases, g_ffts,
+        if interaction_current_mode == "equilibrium":
+            interaction_current_eq = tokovi.compute_equilibrium_interaction_current(
+                self.K, self.rho, self.geom, self.phases, self.g_ffts,
                 impose_deltas=impose_deltas,
                 impose_additional=impose_additional)
+
+            def interaction_current(K, rho, geom, phases, g_ffts,
+                                    impose_deltas, impose_additional):
+                # Keep this as a provider so the measurement row order remains
+                # charge, kinetic heat, interaction heat.
+                return interaction_current_eq
+        else:
+            def interaction_current(K, rho, geom, phases, g_ffts,
+                                    impose_deltas, impose_additional):
+                return tokovi.compute_together_mf_matrices(
+                    K, rho, geom, phases, g_ffts,
+                    impose_deltas=impose_deltas,
+                    impose_additional=impose_additional)
 
         if params["measure_provider"] == 'current':
             measure_provider = self.current
@@ -553,7 +575,8 @@ class model:
                    "ns0" : ns0,
                    "ns1" : ns1,
                    "T" : self.T,
-                   "mu" : self.mu}
+                   "mu" : self.mu,
+                   "interaction_current_mode" : interaction_current_mode}
         
         omegas, Re_sigma = tokovi.optical_conductivity(times, measurement[0], pulz, eta, omega_cut, self.Nk)
         results["omegas"] = omegas

@@ -226,13 +226,24 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=False, i
 
     return M3, M6, -M4a, -M4b
 
+def compute_equilibrium_interaction_current(K, rho, geom, phases, g_ffts,
+                                            impose_deltas=False,
+                                            impose_additional=True):
+    """Return the full one-body interaction-current vertex used by RPA."""
+    m3, m6, m4a, m4b = compute_all_mf_matrices(
+        K, rho, geom, phases, g_ffts,
+        impose_deltas=impose_deltas,
+        impose_additional=impose_additional)
+    if impose_additional:
+        return m6 + m4a + m4b
+    return m3 + m6 + m4a + m4b
+
 def compute_together_mf_matrices(K, rho, geom, phases, g_ffts,
                                  impose_deltas=False, impose_additional=True):
-    m3, m6, m4a, m4b = compute_all_mf_matrices(K, rho, geom, phases, g_ffts,
-                                                        impose_additional=impose_additional, impose_deltas=impose_deltas)
-    if impose_additional:
-        return 0.5*(m6 + m4a + m4b)
-    return 0.5*(m3 + m6 + m4a + m4b)
+    return 0.5 * compute_equilibrium_interaction_current(
+        K, rho, geom, phases, g_ffts,
+        impose_deltas=impose_deltas,
+        impose_additional=impose_additional)
 
 ''' functions mf_matrix1,2,3,4 give exactly the same as function compute_all_mf_matrices,
 but the latter is more convenient (faster if used for multiple calls) because it uses precomputed elements '''
