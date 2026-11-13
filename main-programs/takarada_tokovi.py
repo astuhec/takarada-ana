@@ -1169,36 +1169,36 @@ def compute_single_om_fused(
 
     # ── chi_jj0 ────────────────────────────────────────────────────────
     chi_jj0 = chi_UV(Nk, tok_tilde, tok_tilde, pi_mn, pi_nm)
-    chi_jKj0 = chi_UV(Nk, tokK_tilde, tok_tilde, pi_mn, pi_nm)
-    chi_jEj0 = chi_UV(Nk, tok_tilde, tok_tilde, piw_mn, piw_nm)
-    chi_matj0 = chi_UV(Nk, mat_tilde, tok_tilde, pi_mn, pi_nm)
-    chi_matj0_ = chi_UV(Nk, mat_tilde_, tok_tilde, pi_mn, pi_nm)
+    chi_jjK0 = chi_UV(Nk, tok_tilde, tokK_tilde, pi_mn, pi_nm)
+    chi_jjE0 = chi_UV(Nk, tok_tilde, tok_tilde, piw_mn, piw_nm)
+    chi_jmat0 = chi_UV(Nk, tok_tilde, mat_tilde, pi_mn, pi_nm)
+    chi_jmat0_ = chi_UV(Nk, tok_tilde, mat_tilde_, pi_mn, pi_nm)
 
     # ── chi_jrho0 / chi_rhoj0 ──────────────────────────────────────────
-    chi_jrho0 = np.zeros(Nop, dtype=np.complex128)
     chi_rhoj0 = np.zeros(Nop, dtype=np.complex128)
-    chi_jKrho0 = np.zeros(Nop, dtype=np.complex128)
-    chi_jErho0 = np.zeros(Nop, dtype=np.complex128)
-    chi_matrho0 = np.zeros(Nop, dtype=np.complex128)
-    chi_matrho0_ = np.zeros(Nop, dtype=np.complex128)
+    chi_jrho0 = np.zeros(Nop, dtype=np.complex128)
+    chi_rhojK0 = np.zeros(Nop, dtype=np.complex128)
+    chi_rhojE0 = np.zeros(Nop, dtype=np.complex128)
+    chi_rhomat0 = np.zeros(Nop, dtype=np.complex128)
+    chi_rhomat0_ = np.zeros(Nop, dtype=np.complex128)
     for i in range(Nop):
-        chi_jrho0[i] = chi_UV(Nk, tok_tilde,    rhos_tilde[i], pi_mn, pi_nm)
-        chi_rhoj0[i] = chi_UV(Nk, rhos_tilde[i], tok_tilde,    pi_mn, pi_nm)
-        chi_jKrho0[i] = chi_UV(Nk, tokK_tilde, rhos_tilde[i], pi_mn, pi_nm)
-        chi_jErho0[i] = chi_UV(Nk, tok_tilde,    rhos_tilde[i], piw_mn, piw_nm)
-        chi_matrho0[i] = chi_UV(Nk, mat_tilde, rhos_tilde[i], pi_mn, pi_nm)
-        chi_matrho0_[i] = chi_UV(Nk, mat_tilde_, rhos_tilde[i], pi_mn, pi_nm)
+        chi_rhoj0[i] = chi_UV(Nk, rhos_tilde[i], tok_tilde, pi_mn, pi_nm)
+        chi_jrho0[i] = chi_UV(Nk, tok_tilde, rhos_tilde[i], pi_mn, pi_nm)
+        chi_rhojK0[i] = chi_UV(Nk, rhos_tilde[i], tokK_tilde, pi_mn, pi_nm)
+        chi_rhojE0[i] = chi_UV(Nk, rhos_tilde[i], tok_tilde, piw_mn, piw_nm)
+        chi_rhomat0[i] = chi_UV(Nk, rhos_tilde[i], mat_tilde, pi_mn, pi_nm)
+        chi_rhomat0_[i] = chi_UV(Nk, rhos_tilde[i], mat_tilde_, pi_mn, pi_nm)
 
  # ── RPA corrections ────────────────────────────────────────────────────────────
     mat     = I - chi0 @ thetas_diag
     inv     = LA.inv(mat)
     chi_rpa = inv @ chi0
     dchi_jj = chi_jrho0 @ thetas_diag @ inv @ chi_rhoj0
-    dchi_jKj = chi_jKrho0 @ thetas_diag @ inv @ chi_rhoj0
-    dchi_jEj = chi_jErho0 @ thetas_diag @ inv @ chi_rhoj0
-    dchi_matj = chi_matrho0 @ thetas_diag @ inv @ chi_rhoj0
-    dchi_matj_ = chi_matrho0_ @ thetas_diag @ inv @ chi_rhoj0
-    return om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jKj0, dchi_jKj, chi_jEj0, dchi_jEj, chi_matj0, dchi_matj, chi_matj0_, dchi_matj_, chi_rhoj0
+    dchi_jjK = chi_jrho0 @ thetas_diag @ inv @ chi_rhojK0
+    dchi_jjE = chi_jrho0 @ thetas_diag @ inv @ chi_rhojE0
+    dchi_jmat = chi_jrho0 @ thetas_diag @ inv @ chi_rhomat0
+    dchi_jmat_ = chi_jrho0 @ thetas_diag @ inv @ chi_rhomat0_
+    return om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jjK0, dchi_jjK, chi_jjE0, dchi_jjE, chi_jmat0, dchi_jmat, chi_jmat0_, dchi_jmat_, chi_rhoj0
 
 ''' susceptibilities for an array of omegas '''
 def compute_chi(
@@ -1252,14 +1252,14 @@ def compute_chi(
     chi_rpa_arr   = np.zeros((N_om, Nop, Nop), dtype=np.complex128)
     chi_jj0_arr   = np.zeros(N_om,             dtype=np.complex128)
     dchi_jj_arr   = np.zeros(N_om,             dtype=np.complex128)
-    chi_jKj0_arr   = np.zeros(N_om,             dtype=np.complex128)
-    dchi_jKj_arr   = np.zeros(N_om,             dtype=np.complex128)
-    chi_matj0_arr = np.zeros(N_om, dtype=np.complex128)
-    chi_matj0_arr_ = np.zeros(N_om, dtype=np.complex128)
-    chi_jEj0_arr = np.zeros(N_om, dtype=np.complex128)
-    dchi_matj_arr = np.zeros(N_om, dtype=np.complex128)
-    dchi_matj_arr_ = np.zeros(N_om, dtype=np.complex128)
-    dchi_jEj_arr = np.zeros(N_om, dtype=np.complex128)
+    chi_jjK0_arr   = np.zeros(N_om,             dtype=np.complex128)
+    dchi_jjK_arr   = np.zeros(N_om,             dtype=np.complex128)
+    chi_jmat0_arr = np.zeros(N_om, dtype=np.complex128)
+    chi_jmat0_arr_ = np.zeros(N_om, dtype=np.complex128)
+    chi_jjE0_arr = np.zeros(N_om, dtype=np.complex128)
+    dchi_jmat_arr = np.zeros(N_om, dtype=np.complex128)
+    dchi_jmat_arr_ = np.zeros(N_om, dtype=np.complex128)
+    dchi_jjE_arr = np.zeros(N_om, dtype=np.complex128)
 
     chi_rhoj0_arr = np.zeros((N_om, Nop), dtype=np.complex128)
 
@@ -1284,20 +1284,20 @@ def compute_chi(
         #with tqdm(total=N_om, desc="omegas", disable=not verbose) as pbar:
         for future in as_completed(futures):
             om_idx, result = future.result()
-            om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jKj0, dchi_jKj, chi_jEj0, dchi_jEj, chi_matj0, dchi_matj, chi_matj0_, dchi_matj_, chi_rhoj0 = result
+            om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jjK0, dchi_jjK, chi_jjE0, dchi_jjE, chi_jmat0, dchi_jmat, chi_jmat0_, dchi_jmat_, chi_rhoj0 = result
 
             chi0_arr[om_idx]      = chi0
             chi_rpa_arr[om_idx]   = chi_rpa
             chi_jj0_arr[om_idx]   = chi_jj0
             dchi_jj_arr[om_idx]   = dchi_jj
-            chi_jKj0_arr[om_idx] = chi_jKj0
-            dchi_jKj_arr[om_idx] = dchi_jKj
-            chi_jEj0_arr[om_idx] = chi_jEj0
-            dchi_jEj_arr[om_idx] = dchi_jEj
-            chi_matj0_arr[om_idx] = chi_matj0
-            dchi_matj_arr[om_idx] = dchi_matj
-            chi_matj0_arr_[om_idx] = chi_matj0_
-            dchi_matj_arr_[om_idx] = dchi_matj_
+            chi_jjK0_arr[om_idx] = chi_jjK0
+            dchi_jjK_arr[om_idx] = dchi_jjK
+            chi_jjE0_arr[om_idx] = chi_jjE0
+            dchi_jjE_arr[om_idx] = dchi_jjE
+            chi_jmat0_arr[om_idx] = chi_jmat0
+            dchi_jmat_arr[om_idx] = dchi_jmat
+            chi_jmat0_arr_[om_idx] = chi_jmat0_
+            dchi_jmat_arr_[om_idx] = dchi_jmat_
             chi_rhoj0_arr[om_idx] = chi_rhoj0
 
             if verbose:
@@ -1310,16 +1310,16 @@ def compute_chi(
                'chi_jj0' : chi_jj0_arr,
                'dchi_jj' : dchi_jj_arr,
 
-                'chi_jKj0' : chi_jKj0_arr,
-                'dchi_jKj' : dchi_jKj_arr,
+                'chi_jKj0' : chi_jjK0_arr,
+                'dchi_jKj' : dchi_jjK_arr,
 
-               'chi_jEj0' : chi_jEj0_arr,
-               'chi_matj0' : chi_matj0_arr,
-               'chi_matj0_' : chi_matj0_arr_,
+               'chi_jEj0' : chi_jjE0_arr,
+               'chi_matj0' : chi_jmat0_arr,
+               'chi_matj0_' : chi_jmat0_arr_,
 
-               'dchi_matj' : dchi_matj_arr,
-               'dchi_jEj' : dchi_jEj_arr,
-               'dchi_matj_' : dchi_matj_arr_,
+               'dchi_matj' : dchi_jmat_arr,
+               'dchi_jEj' : dchi_jjE_arr,
+               'dchi_matj_' : dchi_jmat_arr_,
 
                'chi_rhoj0' : chi_rhoj0_arr
                }
