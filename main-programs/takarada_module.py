@@ -139,6 +139,7 @@ class model:
         self.L12 = []
         self.L12K = []
         self.L12q = []
+        self.L12q_ = []
 
         self.L11_boltz = []
         self.L12_boltz  = []
@@ -151,6 +152,8 @@ class model:
         self.L12K_corr = []
         self.L12q_0 = []
         self.L12q_corr = []
+        self.L12q_0_ = []
+        self.L12q_corr_ = []
 
     def GS(self, rho=None):
         rho0 = helpers.rho0(self.Nk) if rho is None else rho.copy()
@@ -306,16 +309,27 @@ class model:
     ''' evaluate self-consistent non-local heat current operator, and transform operators into band basis (tilde) '''
     def velocities(self, impose_deltas=False, impose_additional=True) -> None:
         self.current_tilde = tokovi.operator_tilde(self.current, self.vecs)
-        m3, m6, m4a, m4b = tokovi.compute_all_mf_matrices(self.K, self.rho, self.geom, self.phases, self.g_ffts,
+        m3, m6, m4a, m4b, m3_, m6_, m4a_, m4b_ = tokovi.compute_all_mf_matrices(self.K, self.rho, self.geom, self.phases, self.g_ffts,
                                                           impose_additional=impose_additional, impose_deltas=impose_deltas)
         self.mat1_tilde = tokovi.operator_tilde(m3, self.vecs)
         self.mat2_tilde = tokovi.operator_tilde(m6, self.vecs)
         self.mat3_tilde = tokovi.operator_tilde(m4a, self.vecs)
         self.mat4_tilde = tokovi.operator_tilde(m4b, self.vecs)
+        self.mat1_tilde_ = tokovi.operator_tilde(m3_, self.vecs)
+        self.mat2_tilde_ = tokovi.operator_tilde(m6_, self.vecs)
+        self.mat3_tilde_ = tokovi.operator_tilde(m4a_, self.vecs)
+        self.mat4_tilde_ = tokovi.operator_tilde(m4b_, self.vecs)
+
         if impose_additional:
+            self.mat = m6 + m4a + m4b
+            self.mat_ = m6_ + m4a_ + m4b_
             self.mat_tilde = self.mat2_tilde + self.mat3_tilde + self.mat4_tilde
+            self.mat_tilde_ = self.mat2_tilde_ + self.mat3_tilde_ + self.mat4_tilde_
         else:
+            self.mat = m3 + m6 + m4a + m4b
+            self.mat_ = m3_ + m6_ + m4a_ + m4b_
             self.mat_tilde = self.mat1_tilde + self.mat2_tilde + self.mat3_tilde + self.mat4_tilde
+            self.mat_tilde_ = self.mat1_tilde_ + self.mat2_tilde_ + self.mat3_tilde_ + self.mat4_tilde_
         self.rhos_tilde = tokovi.operator_tilde(self.rhos, self.vecs)
         hartree_shift0 = (self.Vb + self.Vc) * np.sum(self.rho[1,1]).real / self.Nk
         hartree_shift1 = (self.Vb + self.Vc) * np.sum(self.rho[0,0]).real / self.Nk
@@ -326,27 +340,29 @@ class model:
         spektralka = tokovi.Spektralka(epsilons, self.mu, self.energije, Gamma)
         phi = tokovi.phi_Kubo(self.K, self.current_tilde, self.current_tilde, spektralka, epsilons)
         phiQ = tokovi.phi_Kubo(self.K, self.mat_tilde, self.current_tilde, spektralka, epsilons)
+        phiQ_ = tokovi.phi_Kubo(self.K, self.mat_tilde_, self.current_tilde, spektralka, epsilons)
         phiK = tokovi.phi_Kubo(self.K, self.current_tilde, self.currentK_tilde, spektralka, epsilons)
         if dict_form == None:
-            return phi, phiQ, phiK
+            return phi, phiQ, phiQ_, phiK
         elif dict_form:
             phi_boltz = tokovi.phi_Boltzmann(self.K, self.energije, self.mu, epsilons)
             results = {'phi' : phi,
                        'phiQ' : phiQ,
+                       'phiQ_' : phiQ_,
                        'phiK' : phiK,
                        'epsilons' : epsilons,
                        'phi_Boltz' : phi_boltz}
             return results
 
     def ls_Kubo(self, epsilons, Gamma, mfd1):
-        phi, phiQ, phiK = self.transport_functions(epsilons, Gamma)
+        phi, phiQ, phiQ_, phiK = self.transport_functions(epsilons, Gamma)
 
         l11 = np.pi * tokovi.integral_omega(phi * mfd1, epsilons)
         l12 = np.pi * tokovi.integral_omega(epsilons * phi * mfd1, epsilons)
         l12K = np.pi * tokovi.integral_omega(phiK * mfd1, epsilons)
         l12q = np.pi * tokovi.integral_omega(phiQ * mfd1, epsilons)
-
-        return l11, l12, l12K, l12q
+        l12q_ = np.pi * tokovi.integral_omega(phiQ_ * mfd1, epsilons)
+        return l11, l12, l12K, l12q, l12q_
 
     def DC_coefficients(self, eps, Nomega, Gamma):
         tau = 1/(2.0*Gamma)
@@ -357,18 +373,19 @@ class model:
         epsilon_max = np.sqrt(np.abs(np.arccosh(1/(eps*4*self.T))) * 2 * self.T)
         epsilons = np.linspace(-epsilon_max, epsilon_max, Nomega, dtype=np.float64)
         mfd1 = -tokovi.fd_1(epsilons, self.T)
-        l11_, l12_, l12K_, l12q_ = self.ls_Kubo(epsilons, Gamma, mfd1)
+        l11_, l12_, l12K_, l12q_, l12q__ = self.ls_Kubo(epsilons, Gamma, mfd1)
         self.L11.append(l11_.real)
         self.L12.append(l12_.real)
         self.L12K.append(l12K_.real)
         self.L12q.append(l12q_.real)
+        self.L12q_.append(l12q__.real)
 
     def DC_bubble_corr(self, nodes, weights, Gamma, omega0, eps, n_workers=None, n_eps=1.0):
 
         mu_ = self.mu / Gamma
         invt = Gamma / self.T
         
-        results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers, n_eps=n_eps)
+        results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.mat_tilde_, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers, n_eps=n_eps)
         
         Chi_jj0 = - results['chi_jj0'].imag
         dChi_jj  = - results['dchi_jj'].imag
@@ -401,6 +418,18 @@ class model:
         else:
             l12q = tokovi.find_DC_limit(omega0, Chi_matj)
 
+        Chi_matj0_ = - results['chi_matj0_'].imag
+        dChi_matj_ = - results['dchi_matj_'].imag
+        Chi_matj_ = Chi_matj0_ + dChi_matj_
+        if np.max(np.abs(Chi_matj0_)) < 1e-14:
+            l12q_0_ = 0.0
+        else:
+            l12q_0_ = tokovi.find_DC_limit(omega0, Chi_matj0_)
+        if np.max(np.abs(Chi_matj_)) < 1e-14:
+            l12q_ = 0.0
+        else:
+            l12q_ = tokovi.find_DC_limit(omega0, Chi_matj_)
+
         self.L11_0.append(l11_0)
         self.L11_corr.append(l11)
 
@@ -412,6 +441,9 @@ class model:
 
         self.L12q_0.append(l12q_0)
         self.L12q_corr.append(l12q)
+
+        self.L12q_0_.append(l12q_0_)
+        self.L12q_corr_.append(l12q_)
 
     def optical_response(self, Gamma=None,
                          include_phonon=False, lam_b=None, om_b=None, lam_c=None, om_c=None, Gamma_ph=None, faktor=1.0,
@@ -447,10 +479,10 @@ class model:
         mu_ = self.mu / Gamma
         invt = Gamma / self.T
         if not include_phonon:
-            results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps, faktor=faktor, n_eps=n_eps,
+            results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.mat_tilde_, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps, faktor=faktor, n_eps=n_eps,
                                          include_hartree=self.include_hartree)
         elif include_phonon:
-            results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps,
+            results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.mat_tilde_, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps,
                                              include_hartree=self.include_hartree, include_phonon=include_phonon, n_eps=n_eps,
                                              lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=self.Vb, Vc=self.Vc, Gamma_ph=Gamma_ph,faktor=faktor,)
 
@@ -467,11 +499,11 @@ class model:
         """Run frozen or self-consistent HF dynamics under a current pulse.
 
         The interaction-current flags match velocities() by default.
-        With measure_provider='all_three', measurement rows are charge,
-        kinetic heat, and interaction heat current, respectively.
+        With measure_provider='all_three', rows are charge current, kinetic
+        heat current, and the two interaction heat currents, in that order.
         interaction_current_mode='equilibrium' measures the fixed full
-        equilibrium vertex used by RPA.  'instantaneous' preserves the
-        nonlinear 0.5*M[rho(t)] measurement.
+        equilibrium vertex used by RPA.  'instantaneous' uses the nonlinear
+        0.5*M[rho] vertex, with rho frozen at equilibrium when do_freeze=True.
         Gamma_ controls time-domain dephasing; eta only windows the FFT.
         """
         valid_interaction_modes = {"equilibrium", "instantaneous"}
@@ -513,15 +545,16 @@ class model:
             print("Choose a valid perturbation operator. Currently available : current", flush=True)
         
         if interaction_current_mode == "equilibrium":
-            interaction_current_eq = tokovi.compute_equilibrium_interaction_current(
-                self.K, self.rho, self.geom, self.phases, self.g_ffts,
-                impose_deltas=impose_deltas,
-                impose_additional=impose_additional)
+            interaction_current_eq = np.stack(
+                tokovi.compute_equilibrium_interaction_current(
+                    self.K, self.rho, self.geom, self.phases, self.g_ffts,
+                    impose_deltas=impose_deltas,
+                    impose_additional=impose_additional),
+                axis=0)
 
             def interaction_current(K, rho, geom, phases, g_ffts,
                                     impose_deltas, impose_additional):
-                # Keep this as a provider so the measurement row order remains
-                # charge, kinetic heat, interaction heat.
+                # Keep these as a provider so both rows follow the static-row order.
                 return interaction_current_eq
         else:
             def interaction_current(K, rho, geom, phases, g_ffts,
@@ -543,8 +576,7 @@ class model:
             measure_provider = [self.current, interaction_current]
         elif params["measure_provider"] == 'all_three':
             currentK = tokovi.kinetic_current_provider(self.epsilon, self.epsilon_, self.mu, self.Vb, self.Vc, self.include_hartree)
-            # Measurement rows: current, kinetic current, interaction current.
-            # Keep the two dynamic providers in this order.
+            # Measurement rows: current, kinetic current, then both interaction currents.
             measure_provider = [self.current, currentK, interaction_current]
         else:
             print("Choose a valid measure provider." \
@@ -567,6 +599,16 @@ class model:
         pulz = tokovi.A_pulz(times, A0, t0, sigma, Omega0)
         results = {"time" : times,
                    "measurement" : measurement,
+                   "measurement_channels": {
+                       "current": ["current"],
+                       "kinetic_current": ["kinetic_current"],
+                       "curent_kinetic_current": ["current", "kinetic_current"],
+                       "current_interaction": [
+                           "current", "interaction_current", "interaction_current_"],
+                       "all_three": [
+                           "current", "kinetic_current", "interaction_current",
+                           "interaction_current_"],
+                   }[params["measure_provider"]],
                    #"measurement_k" : measurement_k,
                    "pulz" : pulz,
                    "norma" : norma,
@@ -605,6 +647,7 @@ class model:
             data["L12"] = self.L12
             data["L12K"] = self.L12K
             data["L12q"] = self.L12q
+            data["L12q_"] = self.L12q_
             data["L11_boltz"] = self.L11_boltz
             data["L12_boltz"] = self.L12_boltz
 
@@ -617,6 +660,8 @@ class model:
             data["L12K_corr"] = self.L12K_corr
             data["L12q_0"] = self.L12q_0
             data["L12q_corr"] = self.L12q_corr
+            data["L12q_0_"] = self.L12q_0_
+            data["L12q_corr_"] = self.L12q_corr_
         return data
     
 def Gap_infty(input_file, parameters, include_hartree,

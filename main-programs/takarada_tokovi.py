@@ -105,11 +105,16 @@ def G_ffts(phases, Nk):
 ''' I thought imposing deltas by hand is necessary but it doesn't make a change (so impose_deltas=True,False give the same) '''
 def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=False, impose_additional=True):
     Nk = len(K)
-
+    lege = geom["pos"]
     M3  = np.zeros((2,2,Nk), dtype=np.complex128)
     M6  = np.zeros((2,2,Nk), dtype=np.complex128)
     M4a = np.zeros((2,2,Nk), dtype=np.complex128)
     M4b = np.zeros((2,2,Nk), dtype=np.complex128)
+
+    M3_nonlocI  = np.zeros((2,2,Nk), dtype=np.complex128)
+    M6_nonlocI  = np.zeros((2,2,Nk), dtype=np.complex128)
+    M4a_nonlocI = np.zeros((2,2,Nk), dtype=np.complex128)
+    M4b_nonlocI = np.zeros((2,2,Nk), dtype=np.complex128)
 
     # --- prepare densities ---
     rho00 = rho[0,0,:]
@@ -147,14 +152,17 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=False, i
                     elif orb1_==orb2 and x_==0: deltas=0.0 # correct
 
                 if deltas!=0.0:
-                    lega = geom["pos"][orb2] - geom["pos"][orb1_] - x_
+                    lega = lege[orb2] - lege[orb1_] - x_
+                    lega_nonlocI = lege[orb1] - lege[orb2] + x
 
                     # ---------- M3 ---------- first term in equation (ell=1 term)
                     M3[orb1,orb2] += -1j * t * V_ * lega * phase_k * n[orb1_] / Nk
+                    M3_nonlocI[orb1,orb2] += -1j * t * V_ * lega_nonlocI * phase_k * n[orb1_] / Nk
 
                     # ---------- M6 ---------- second term in equation (ell=2 term)
                     suma = np.sum(rho[orb2,orb1,:] * phase_k)
                     M6[orb1_,orb1_] += -1j * t * V_ * lega * suma / Nk
+                    M6_nonlocI[orb1_,orb1_] += -1j * t * V_ * lega_nonlocI * suma / Nk
 
                     # ---------- M4a ---------- fourth term in equation (ell=3 term)
                     if impose_additional and orb1==orb1_ and x==x_ and x==0.0:
@@ -163,9 +171,13 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=False, i
                         faktor=1.0
                     #g = -1j * V_ * lega * np.conj(phase_k) * phases["int"][m]
                     g_fft = -1j * V_ * lega * g_ffts_M4a1[l,m,:] #np.fft.fft(np.fft.ifftshift(g))
+                    g_fft_nonlocI = -1j * V_ * lega_nonlocI * g_ffts_M4a1[l,m,:]
                     gh = np.fft.fftshift(
                             np.fft.ifft(g_fft * rho_fft[(orb1_,orb1)]))
+                    gh_nonlocI = np.fft.fftshift(
+                            np.fft.ifft(g_fft_nonlocI * rho_fft[(orb1_,orb1)]))
                     M4a[orb1_,orb2] += fk * gh * faktor
+                    M4a_nonlocI[orb1_,orb2] += fk * gh_nonlocI * faktor
 
                     # ---------- M4b ---------- third term in equation (ell=4 term)
                     if impose_additional and orb1_==orb2 and x_==0.0 and x==0.0:
@@ -175,11 +187,14 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=False, i
                     h = fk * rho[orb2,orb1_,:]
                     h_fft = np.fft.fft(np.fft.ifftshift(h))
                     g_fft = -1j * V_ * lega * g_ffts_M4b1[l,m,:]
+                    g_fft_nonlocI = -1j * V_ * lega_nonlocI * g_ffts_M4b1[l,m,:]
                     #g_fft = np.fft.fft(np.fft.ifftshift(
                     #            -1j * V_ * lega * np.conj(phases["int"][m]) * phases["kin"][l]
                     #        ))
                     gh = np.fft.fftshift(np.fft.ifft(g_fft * h_fft))
+                    gh_nonlocI = np.fft.fftshift(np.fft.ifft(g_fft_nonlocI * h_fft))
                     M4b[orb1,orb1_] += gh * faktor
+                    M4b_nonlocI[orb1,orb1_] += gh_nonlocI * faktor
 
             # first term in square bracket --> t_{alpha beta} * V_{alpha' alpha}
             if orb1 == orb2_:
@@ -190,14 +205,17 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=False, i
                     if orb1_==orb2 and x+x_==0.0: deltas=0.0 # correct
                     
                 if deltas!=0.0:
-                    lega = geom["pos"][orb1] - geom["pos"][orb1_] - x_
+                    lega = lege[orb1] - lege[orb1_] - x_
+                    lega_nonlocI = lege[orb2] - lege[orb1] - x
                     
                     # ---------- M3 ---------- first term in equation (ell=1 term)
                     M3[orb1,orb2] += +1j * t * V_ * lega * phase_k * n[orb1_] / Nk
+                    M3_nonlocI[orb1,orb2] += +1j * t * V_ * lega_nonlocI * phase_k * n[orb1_] / Nk
 
                     # ---------- M6 ---------- second term in equation (ell=2 term)
                     suma = np.sum(rho[orb2,orb1,:] * phase_k)
                     M6[orb1_,orb1_] += +1j * t * V_ * lega * suma / Nk
+                    M6_nonlocI[orb1_,orb1_] += +1j * t * V_ * lega_nonlocI * suma / Nk
 
                     # ---------- M4a ---------- fourth term in equation (ell=3 term)
                     if impose_additional and orb1_==orb1 and x_==0.0 and x==0.0:
@@ -206,9 +224,13 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=False, i
                         faktor=1.0
                     #g = +1j * V_ * lega * phases["int"][m]
                     g_fft = +1j * V_ * lega * g_ffts_M4a2[l,m,:] #np.fft.fft(np.fft.ifftshift(g))
+                    g_fft_nonlocI = +1j * V_ * lega_nonlocI * g_ffts_M4a2[l,m,:]
                     gh = np.fft.fftshift(
                             np.fft.ifft(g_fft * rho_fft[(orb1_,orb1)]))
+                    gh_nonlocI = np.fft.fftshift(
+                            np.fft.ifft(g_fft_nonlocI * rho_fft[(orb1_,orb1)]))
                     M4a[orb1_,orb2] += fk * gh * faktor
+                    M4a_nonlocI[orb1_,orb2] += fk * gh_nonlocI * faktor
 
                     # ---------- M4b ---------- third term in equation (ell=4 term)
                     #g = +1j * V_ * lega * np.conj(phases["int"][m])
@@ -217,33 +239,40 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=False, i
                     else:
                         faktor=1.0
                     g_fft = +1j * V_ * lega * g_ffts_M4b2[l,m,:]#np.fft.fft(np.fft.ifftshift(g))
+                    g_fft_nonlocI = +1j * V_ * lega_nonlocI * g_ffts_M4b2[l,m,:]#np.fft.fft(np.fft.ifftshift(g))
                     h = fk * rho[orb2,orb1_,:]
                     h_fft = np.fft.fft(np.fft.ifftshift(h))
                     gh = np.fft.fftshift(
                                 np.fft.ifft(g_fft * h_fft)
                     )
+                    gh_nonlocI = np.fft.fftshift(
+                                np.fft.ifft(g_fft_nonlocI * h_fft)
+                    )
                     M4b[orb1,orb1_] += gh * faktor
+                    M4b_nonlocI[orb1,orb1_] += gh_nonlocI * faktor
 
-    return M3, M6, -M4a, -M4b
+    return M3, M6, -M4a, -M4b, M3_nonlocI, M6_nonlocI, -M4a_nonlocI, -M4b_nonlocI
+
 
 def compute_equilibrium_interaction_current(K, rho, geom, phases, g_ffts,
                                             impose_deltas=False,
                                             impose_additional=True):
     """Return the full one-body interaction-current vertex used by RPA."""
-    m3, m6, m4a, m4b = compute_all_mf_matrices(
+    m3, m6, m4a, m4b, m3_nonlocI, m6_nonlocI, m4a_nonlocI, m4b_nonlocI = compute_all_mf_matrices(
         K, rho, geom, phases, g_ffts,
         impose_deltas=impose_deltas,
         impose_additional=impose_additional)
     if impose_additional:
-        return m6 + m4a + m4b
-    return m3 + m6 + m4a + m4b
+        return m6 + m4a + m4b, m6_nonlocI + m4a_nonlocI + m4b_nonlocI
+    return m3 + m6 + m4a + m4b, m3_nonlocI + m6_nonlocI + m4a_nonlocI + m4b_nonlocI
 
 def compute_together_mf_matrices(K, rho, geom, phases, g_ffts,
                                  impose_deltas=False, impose_additional=True):
-    return 0.5 * compute_equilibrium_interaction_current(
+    interaction_current, interaction_current_ = compute_equilibrium_interaction_current(
         K, rho, geom, phases, g_ffts,
         impose_deltas=impose_deltas,
         impose_additional=impose_additional)
+    return 0.5 * np.stack((interaction_current, interaction_current_), axis=0)
 
 ''' functions mf_matrix1,2,3,4 give exactly the same as function compute_all_mf_matrices,
 but the latter is more convenient (faster if used for multiple calls) because it uses precomputed elements '''
@@ -664,8 +693,7 @@ upon application of a perturbation (generated by perturbation_operator)
 * do_freeze=False is the opposite; Hartree-Fock is dynamic, i.e. densities respond to perturbations, and in this response the vertex corrections are captured
 '''
 
-''' if I want to measure non-local energy current, I should get its mean-field approximation which depends on rho(t)
-    at each time step. if I measure normal current, it is a fixed operator '''
+''' Dynamic providers may return one operator or a stack of measurement operators. '''
 def compile_measure_provider(measure_provider):
     """Group static operators first, preserving the supplied dynamic-provider order."""
 
@@ -688,6 +716,15 @@ def compile_measure_provider(measure_provider):
 
     return static_ops, dynamic_providers
 
+def _measurement_operator_stack(ops, Nk):
+    if ops.ndim == 3:
+        ops = ops[np.newaxis, ...]
+    if ops.ndim != 4 or ops.shape[1:] != (2, 2, Nk):
+        raise ValueError(
+            "A dynamic measurement provider must return an operator with "
+            "shape (2, 2, Nk) or a stack with shape (Nop, 2, 2, Nk).")
+    return ops
+
 def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
                   perturbation_operator, measure_provider,
                   A0, t0, sigma, Omega, dt, t_max,
@@ -695,6 +732,7 @@ def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
                   impose_deltas=False, impose_additional=True):
     N_points = int(t_max/dt)
     Nk = len(K)
+    rho0 = np.copy(rho)
 
     static_ops, dynamic_providers = compile_measure_provider(measure_provider)
 
@@ -704,15 +742,14 @@ def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
         ops_list.append(np.concatenate(static_ops, axis=0))
 
     for p in dynamic_providers:
-        ops = p(K, rho, geom, phases, g_ffts, impose_deltas, impose_additional)
-        if ops.ndim == 3:
-            ops = ops[np.newaxis, ...]
-        ops_list.append(ops)
+        provider_rho = rho0 if do_freeze else rho
+        ops = p(K, provider_rho, geom, phases, g_ffts,
+                impose_deltas, impose_additional)
+        ops_list.append(_measurement_operator_stack(ops, Nk))
 
     measure_operators = np.concatenate(ops_list, axis=0)
     Nop = measure_operators.shape[0]
 
-    rho0 = np.copy(rho)
     H0 = h_k(K, hk0, rho0, Vb, Vc, 0.0, include_hartree)
 
     rho_expvals = np.zeros((Nop, N_points), dtype=np.complex128)
@@ -796,10 +833,10 @@ def simulate_pulz(K, hk0, rho, vecs, Vb, Vc, include_hartree,
             ops_list.append(np.concatenate(static_ops, axis=0))
 
         for p in dynamic_providers:
-            ops = p(K, rho, geom, phases, g_ffts, impose_deltas, impose_additional)
-            if ops.ndim == 3:
-                ops = ops[np.newaxis, ...]
-            ops_list.append(ops)
+            provider_rho = rho0 if do_freeze else rho
+            ops = p(K, provider_rho, geom, phases, g_ffts,
+                    impose_deltas, impose_additional)
+            ops_list.append(_measurement_operator_stack(ops, Nk))
 
         measure_operators = np.concatenate(ops_list, axis=0)
 
@@ -1101,7 +1138,7 @@ def chi_UV(Nk, U, V, pi_mn, pi_nm):
 def compute_single_om_fused(
     om,
     Nk, Gamma, mu_, invt, nodes, weights,
-    thetas, tok_tilde, tokK_tilde, mat_tilde,
+    thetas, tok_tilde, tokK_tilde, mat_tilde, mat_tilde_,
     energije,
     rhos_tilde,
     eps=1e-5,
@@ -1135,6 +1172,7 @@ def compute_single_om_fused(
     chi_jKj0 = chi_UV(Nk, tokK_tilde, tok_tilde, pi_mn, pi_nm)
     chi_jEj0 = chi_UV(Nk, tok_tilde, tok_tilde, piw_mn, piw_nm)
     chi_matj0 = chi_UV(Nk, mat_tilde, tok_tilde, pi_mn, pi_nm)
+    chi_matj0_ = chi_UV(Nk, mat_tilde_, tok_tilde, pi_mn, pi_nm)
 
     # ── chi_jrho0 / chi_rhoj0 ──────────────────────────────────────────
     chi_jrho0 = np.zeros(Nop, dtype=np.complex128)
@@ -1142,12 +1180,14 @@ def compute_single_om_fused(
     chi_jKrho0 = np.zeros(Nop, dtype=np.complex128)
     chi_jErho0 = np.zeros(Nop, dtype=np.complex128)
     chi_matrho0 = np.zeros(Nop, dtype=np.complex128)
+    chi_matrho0_ = np.zeros(Nop, dtype=np.complex128)
     for i in range(Nop):
         chi_jrho0[i] = chi_UV(Nk, tok_tilde,    rhos_tilde[i], pi_mn, pi_nm)
         chi_rhoj0[i] = chi_UV(Nk, rhos_tilde[i], tok_tilde,    pi_mn, pi_nm)
         chi_jKrho0[i] = chi_UV(Nk, tokK_tilde, rhos_tilde[i], pi_mn, pi_nm)
         chi_jErho0[i] = chi_UV(Nk, tok_tilde,    rhos_tilde[i], piw_mn, piw_nm)
         chi_matrho0[i] = chi_UV(Nk, mat_tilde, rhos_tilde[i], pi_mn, pi_nm)
+        chi_matrho0_[i] = chi_UV(Nk, mat_tilde_, rhos_tilde[i], pi_mn, pi_nm)
 
  # ── RPA corrections ────────────────────────────────────────────────────────────
     mat     = I - chi0 @ thetas_diag
@@ -1157,14 +1197,14 @@ def compute_single_om_fused(
     dchi_jKj = chi_jKrho0 @ thetas_diag @ inv @ chi_rhoj0
     dchi_jEj = chi_jErho0 @ thetas_diag @ inv @ chi_rhoj0
     dchi_matj = chi_matrho0 @ thetas_diag @ inv @ chi_rhoj0
-
-    return om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jKj0, dchi_jKj, chi_jEj0, dchi_jEj, chi_matj0, dchi_matj, chi_rhoj0
+    dchi_matj_ = chi_matrho0_ @ thetas_diag @ inv @ chi_rhoj0
+    return om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jKj0, dchi_jKj, chi_jEj0, dchi_jEj, chi_matj0, dchi_matj, chi_matj0_, dchi_matj_, chi_rhoj0
 
 ''' susceptibilities for an array of omegas '''
 def compute_chi(
     omegas,
     Nk, Gamma, mu_, invt, nodes, weights,
-    thetas, tok_tilde, tokK_tilde, mat_tilde,
+    thetas, tok_tilde, tokK_tilde, mat_tilde, mat_tilde_,
     energije,
     rhos_tilde,
     verbose=True,
@@ -1215,8 +1255,10 @@ def compute_chi(
     chi_jKj0_arr   = np.zeros(N_om,             dtype=np.complex128)
     dchi_jKj_arr   = np.zeros(N_om,             dtype=np.complex128)
     chi_matj0_arr = np.zeros(N_om, dtype=np.complex128)
+    chi_matj0_arr_ = np.zeros(N_om, dtype=np.complex128)
     chi_jEj0_arr = np.zeros(N_om, dtype=np.complex128)
     dchi_matj_arr = np.zeros(N_om, dtype=np.complex128)
+    dchi_matj_arr_ = np.zeros(N_om, dtype=np.complex128)
     dchi_jEj_arr = np.zeros(N_om, dtype=np.complex128)
 
     chi_rhoj0_arr = np.zeros((N_om, Nop), dtype=np.complex128)
@@ -1225,7 +1267,7 @@ def compute_chi(
         result = compute_single_om_fused(
             om,        # om = frequency value, omegas = full array
             Nk, Gamma, mu_, invt, nodes, weights,
-            thetas, tok_tilde, tokK_tilde, mat_tilde,
+            thetas, tok_tilde, tokK_tilde, mat_tilde, mat_tilde_,
             energije, rhos_tilde,
             eps=eps,
             include_hartree=include_hartree, include_phonon=include_phonon, n_eps=n_eps,
@@ -1242,7 +1284,7 @@ def compute_chi(
         #with tqdm(total=N_om, desc="omegas", disable=not verbose) as pbar:
         for future in as_completed(futures):
             om_idx, result = future.result()
-            om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jKj0, dchi_jKj, chi_jEj0, dchi_jEj, chi_matj0, dchi_matj, chi_rhoj0 = result
+            om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jKj0, dchi_jKj, chi_jEj0, dchi_jEj, chi_matj0, dchi_matj, chi_matj0_, dchi_matj_, chi_rhoj0 = result
 
             chi0_arr[om_idx]      = chi0
             chi_rpa_arr[om_idx]   = chi_rpa
@@ -1254,6 +1296,8 @@ def compute_chi(
             dchi_jEj_arr[om_idx] = dchi_jEj
             chi_matj0_arr[om_idx] = chi_matj0
             dchi_matj_arr[om_idx] = dchi_matj
+            chi_matj0_arr_[om_idx] = chi_matj0_
+            dchi_matj_arr_[om_idx] = dchi_matj_
             chi_rhoj0_arr[om_idx] = chi_rhoj0
 
             if verbose:
@@ -1271,9 +1315,11 @@ def compute_chi(
 
                'chi_jEj0' : chi_jEj0_arr,
                'chi_matj0' : chi_matj0_arr,
+               'chi_matj0_' : chi_matj0_arr_,
 
                'dchi_matj' : dchi_matj_arr,
                'dchi_jEj' : dchi_jEj_arr,
+               'dchi_matj_' : dchi_matj_arr_,
 
                'chi_rhoj0' : chi_rhoj0_arr
                }
