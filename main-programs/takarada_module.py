@@ -194,7 +194,7 @@ class model:
         self.delta_b, self.delta_c = helpers.Delta(self.K, self.rho, self.Vb, self.Vc)
 
     def run_Tdependence(self, k=None, n=None,
-                        beta=None, scale=None, Nbeta=None, freq_betas=None):
+                        beta=None, scale=None, Nbeta=None, freq_betas=None, impose_additional=True):
                         
         ''' read input parameter and initialize the system '''
         config = self.config
@@ -280,7 +280,7 @@ class model:
                 energy = helpers.energy_average(self.K, self.rho, self.phys_parameters, self.energije, self.mu, self.T)
                 self.mean_energies.append(energy)
 
-                self.velocities()
+                self.velocities(impose_additional=impose_additional)
 
                 if evaluate_transport_DC and self.Gamma_tr>0.0:
                     ''' DC coefficients: Boltzmann's and Kubo's (evaluated only if Gamma>0), evaluating the bubble diagram (coefficients as integrals of transport functions) '''
