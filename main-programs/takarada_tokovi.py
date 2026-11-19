@@ -1,9 +1,11 @@
 import numpy as np
 import scipy.linalg as LA
+import numba
 from numba import njit, prange
 from scipy.linalg import expm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy import linalg as LA
+from scipy.special import psi as _psi
 
 from takarada_helpers import h_k, Delta, delta_approximation
 
@@ -256,15 +258,27 @@ def compute_all_mf_matrices(K, rho, geom, phases, g_ffts, impose_deltas=False, i
 
 def compute_equilibrium_interaction_current(K, rho, geom, phases, g_ffts,
                                             impose_deltas=False,
-                                            impose_additional=True):
-    """Return the full one-body interaction-current vertex used by RPA."""
+                                            impose_additional=True,
+                                            add_delta_J2=False, rho_eq=None):
+    """Return the full one-body interaction-current vertex used by RPA.
+    add_delta_J2=True adds delta_J2_tok (the <n>-subtraction in H_int, P_int), with <n> from rho_eq
+    (default: rho). Recommended: impose_additional=False, add_delta_J2=True; the two together would
+    subtract the Hartree part twice and are refused."""
+    if add_delta_J2 and impose_additional:
+        raise ValueError("add_delta_J2=True with impose_additional=True subtracts the Hartree part twice")
     m3, m6, m4a, m4b, m3_nonlocI, m6_nonlocI, m4a_nonlocI, m4b_nonlocI = compute_all_mf_matrices(
         K, rho, geom, phases, g_ffts,
         impose_deltas=impose_deltas,
         impose_additional=impose_additional)
     if impose_additional:
         return m6 + m4a + m4b, m6_nonlocI + m4a_nonlocI + m4b_nonlocI
-    return m3 + m6 + m4a + m4b, m3_nonlocI + m6_nonlocI + m4a_nonlocI + m4b_nonlocI
+    mat = m3 + m6 + m4a + m4b
+    mat_ = m3_nonlocI + m6_nonlocI + m4a_nonlocI + m4b_nonlocI
+    if add_delta_J2:
+        dJ, dJ_ = delta_J2_tok(K, rho if rho_eq is None else rho_eq,
+                               geom["pos"], geom["kinetic"], geom["interaction"])
+        mat, mat_ = mat + dJ, mat_ + dJ_
+    return mat, mat_
 
 def compute_together_mf_matrices(K, rho, geom, phases, g_ffts,
                                  impose_deltas=False, impose_additional=True):
@@ -273,6 +287,35 @@ def compute_together_mf_matrices(K, rho, geom, phases, g_ffts,
         impose_deltas=impose_deltas,
         impose_additional=impose_additional)
     return 0.5 * np.stack((interaction_current, interaction_current_), axis=0)
+
+def delta_J2_tok(K, rho, pos, kinetic, interaction, exclude_same_bond=True):
+    ''' Change of J2 under n -> n - <n> in H_int and P_int: dJ2 (p-terms, interaction-bond vector, goes
+        with mat) and dJ2_ (mu-terms, kinetic-bond vector, goes with mat_); dJ2 = -m3, dJ2_ = -m3_.
+        exclude_same_bond: for each hopping line (x,a,b) leave out the interaction lines on the same bond,
+        (x,a,b) and (-x,b,a). In J2 their Hartree terms (m3) cancel exactly against their exchange terms
+        (m4a+m4b), as Pauli requires ([c_a^+ c_b, n_a n_b] = 0); subtracting only the Hartree half would leave
+        the exchange half uncompensated. dJ2 + dJ2_ is unchanged (X_int = X_kin for these pairs). '''
+    Nk = len(K)
+    n = np.array([np.sum(rho[0, 0]).real, np.sum(rho[1, 1]).real]) / Nk
+
+    dJ2 = np.zeros((2, 2, Nk), dtype=np.complex128)
+    dJ2_ = np.zeros((2, 2, Nk), dtype=np.complex128)
+    for x, orb1, orb2, t in kinetic:
+        orb1, orb2 = int(orb1), int(orb2)
+        ms = np.zeros(2)
+        ps = np.zeros(2)
+        for x_, orb1_, orb2_, V_ in interaction:
+            orb1_, orb2_ = int(orb1_), int(orb2_)
+            if exclude_same_bond and ((orb1_ == orb1 and orb2_ == orb2 and x_ == x) or
+                                      (orb1_ == orb2 and orb2_ == orb1 and x_ == -x)):
+                continue
+            ms[orb1_] += V_ * n[orb2_]
+            ps[orb1_] += V_ * n[orb2_] * (x_ + pos[orb1_] - pos[orb2_])
+        phase = np.exp(-1j * K * x)
+        lega_kin = x + pos[orb1] - pos[orb2]
+        dJ2[orb1,orb2] += 1j * t * (- ps[orb1] + ps[orb2]) * phase
+        dJ2_[orb1,orb2] += 1j * t * (ms[orb1] + ms[orb2]) * lega_kin  * phase
+    return dJ2, dJ2_
 
 ''' functions mf_matrix1,2,3,4 give exactly the same as function compute_all_mf_matrices,
 but the latter is more convenient (faster if used for multiple calls) because it uses precomputed elements '''
@@ -495,6 +538,15 @@ def operator_bare(op_tilde, vecs):
     else:
         op_bare = np.einsum('jix,imx,lmx->jlx',vecs, op_tilde, vecs.conj())
     return op_bare
+
+''' hermitian part (X + X^dag)/2 of an operator of shape (..., Norb, Norb, Nk), in band or orbital basis.
+    operator_tilde returns hermitian operators only up to roundoff (~1e-16 relative; ~5e-14 for mat_tilde,
+    where m4a and m4b cancel). In chi_UV the anti-hermitian roundoff (e.g. Im of diagonal elements)
+    multiplies Re(pi), which stays finite as omega -> 0, so Im chi gets an omega-independent error and
+    -Im chi/omega one that grows like 1/omega (it spoils e.g. chi_matj = 0 at the PH point).
+    Use only for operators that are hermitian by construction (not for the separate pieces m4a, m4b, ...). '''
+def hermitian_part(op):
+    return 0.5 * (op + np.conj(np.swapaxes(op, -3, -2)))
 
 ''' df/domega, f is Fermi-Dirac distribution function '''
 @njit(cache=True)
@@ -1106,6 +1158,120 @@ def precompute_Pi_all(omega, energije, Gamma, mu_, invt, nodes, weights, eps=1e-
                 piw_nm[m, n, j] = pie_nmk
     return pi_mn, pi_nm, piw_mn, piw_nm
 
+''' accurate Lorentzian bubbles, same output as precompute_Pi_all (default in compute_chi: bubble="exact").
+    Why: Pi_bubble_tilde gets the imaginary parts right, but its real (static) parts are off by
+    0.1-10 % and much more in some cases, because the Gauss-Legendre nodes do not resolve the
+    Lorentzians over the wide windows. The real parts enter the RPA denominator
+    (e.g. the Goldstone zero mode at t12=0 is gapped by ~1e-3 instead of ~1e-10).
+    See takarada/latex/tekst.tex, Sec. 7.
+
+    Real parts: closed form. With the integrand written as sum_j alpha_j/(e - z_j), sum_j alpha_j = 0,
+        int de f(e) sum_j alpha_j/(e - z_j) = sum_j alpha_j [psi(1/2 + s_j (z_j-mu)/(2 pi i T)) + i pi s_j/2],
+    s_j = sign(Im z_j), psi = digamma.
+    Imaginary parts: -pi int de A_m(e) A_n(e+w) [f(e) - f(e+w)] (x (e - mu + w/2) for the weighted bubble)
+    on a uniform grid with spacing h_over * min(Gamma, T) over the window where f(e) - f(e+w) is nonzero.
+    (The closed form loses precision for these tiny tail contributions in a gapped state.) '''
+def _Psi_digamma(z, mu, T):
+    s = np.sign(z.imag)
+    return _psi(0.5 + s * (z - mu) / (2j * np.pi * T)) + 0.5j * np.pi * s
+
+def _int_f_three_poles(poles, n0, n1, mu, T):
+    ''' int de f(e) (n0 + n1 e) / prod_j (e - poles[j]) for three simple poles '''
+    out = 0.0
+    for j in range(3):
+        den = 1.0
+        for l in range(3):
+            if l != j:
+                den = den * (poles[j] - poles[l])
+        out = out + (n0 + n1 * poles[j]) / den * _Psi_digamma(poles[j], mu, T)
+    return out
+
+def _bubble_half_closed_form(Em, En, w, G, mu, T, faktor=1.0):
+    ''' int de [A_m(e) G^R_n(e+w) f(e) + A_n(e+w) G^A_m(e) f(e+w)], plain and weighted with
+        (e - mu + 0.5*w*faktor); Em, En arrays over k. Only the real parts are used. '''
+    c = G / np.pi
+    # coinciding poles when Em - En + w = 0: shift by a negligible amount (the result is continuous)
+    tiny = 1e-9 * G
+    d = Em - En + w
+    Em = np.where(np.abs(d) < tiny, En - w + tiny, Em)
+    p1 = (Em + 1j * G, Em - 1j * G, En - w - 1j * G)      # A_m(e) G^R_n(e+w) f(e)
+    p2 = (En + 1j * G, En - 1j * G, Em + w + 1j * G)      # A_n(e') G^A_m(e'-w) f(e'), e' = e+w
+    t1 = _int_f_three_poles(p1, c, 0.0, mu, T)
+    t2 = _int_f_three_poles(p2, c, 0.0, mu, T)
+    t1w = _int_f_three_poles(p1, c * (-mu + 0.5 * w * faktor), c, mu, T)
+    t2w = _int_f_three_poles(p2, c * (-mu - w + 0.5 * w * faktor), c, mu, T)
+    return t1 + t2, t1w + t2w
+
+@njit(parallel=True, cache=True)
+def _bubble_imag_window(omega, energije, Gamma, mu, T, lo, h, npts, faktor=1.0):
+    Norb, Nk = energije.shape
+    im_mn = np.zeros((Norb, Norb, Nk)); im_nm = np.zeros((Norb, Norb, Nk))
+    imw_mn = np.zeros((Norb, Norb, Nk)); imw_nm = np.zeros((Norb, Norb, Nk))
+    es = np.empty(npts); df = np.empty(npts); pref = np.empty(npts)
+    for i in range(npts):
+        e = lo + i * h
+        es[i] = e
+        x = (e - mu) / T
+        xw = (e + omega - mu) / T
+        ex = np.exp(-abs(x)); exw = np.exp(-abs(xw))
+        if x >= 0.0:
+            f, fc = ex / (1.0 + ex), 1.0 / (1.0 + ex)
+        else:
+            f, fc = 1.0 / (1.0 + ex), ex / (1.0 + ex)
+        if xw >= 0.0:
+            fw, fwc = exw / (1.0 + exw), 1.0 / (1.0 + exw)
+        else:
+            fw, fwc = 1.0 / (1.0 + exw), exw / (1.0 + exw)
+        if omega >= 0.0:
+            df[i] = f * fwc * (-np.expm1(-omega / T))      # f(e) - f(e+w), stable
+        else:
+            df[i] = -fw * fc * (-np.expm1(omega / T))
+        pref[i] = e - mu + 0.5 * omega * faktor
+    c = Gamma / np.pi
+    g2 = Gamma * Gamma
+    for j in prange(Nk):
+        for m in range(Norb):
+            for n in range(m, Norb):
+                Em = energije[m, j]; En = energije[n, j]
+                s_mn = 0.0; s_nm = 0.0; sw_mn = 0.0; sw_nm = 0.0
+                for i in range(npts):
+                    e = es[i]
+                    Am = c / ((e - Em) ** 2 + g2)
+                    An = c / ((e - En) ** 2 + g2)
+                    Amw = c / ((e + omega - Em) ** 2 + g2)
+                    Anw = c / ((e + omega - En) ** 2 + g2)
+                    v_mn = Am * Anw * df[i]
+                    v_nm = An * Amw * df[i]
+                    s_mn += v_mn; s_nm += v_nm
+                    sw_mn += v_mn * pref[i]; sw_nm += v_nm * pref[i]
+                im_mn[m, n, j] = -np.pi * h * s_mn
+                im_nm[m, n, j] = -np.pi * h * s_nm
+                imw_mn[m, n, j] = -np.pi * h * sw_mn
+                imw_nm[m, n, j] = -np.pi * h * sw_nm
+    return im_mn, im_nm, imw_mn, imw_nm
+
+def precompute_Pi_all_exact(omega, energije, Gamma, mu, T, faktor=1.0, n_T=40.0, h_over=0.05):
+    ''' same output as precompute_Pi_all, but mu and T in physical units (not scaled by Gamma) '''
+    if T <= 0.0:
+        raise ValueError("precompute_Pi_all_exact needs T > 0")
+    Norb, Nk = energije.shape
+    pi_mn = np.zeros((Norb, Norb, Nk), dtype=np.complex128)
+    pi_nm = np.zeros_like(pi_mn); piw_mn = np.zeros_like(pi_mn); piw_nm = np.zeros_like(pi_mn)
+    h = h_over * min(Gamma, T)
+    lo = mu - max(omega, 0.0) - n_T * T
+    hi = mu - min(omega, 0.0) + n_T * T
+    npts = int(np.ceil((hi - lo) / h)) + 1
+    im_mn, im_nm, imw_mn, imw_nm = _bubble_imag_window(omega, energije, Gamma, mu, T, lo, h, npts, faktor)
+    for m in range(Norb):
+        for n in range(m, Norb):
+            re_mn, rew_mn = _bubble_half_closed_form(energije[m], energije[n], omega, Gamma, mu, T, faktor)
+            re_nm, rew_nm = _bubble_half_closed_form(energije[n], energije[m], omega, Gamma, mu, T, faktor)
+            pi_mn[m, n] = re_mn.real + 1j * im_mn[m, n]
+            pi_nm[m, n] = re_nm.real + 1j * im_nm[m, n]
+            piw_mn[m, n] = rew_mn.real + 1j * imw_mn[m, n]
+            piw_nm[m, n] = rew_nm.real + 1j * imw_nm[m, n]
+    return pi_mn, pi_nm, piw_mn, piw_nm
+
 ''' bubble susceptibility between U and V (need to be in band basis,i.e. tilde versions) '''
 @njit(parallel=True, cache=True)
 def chi_UV(Nk, U, V, pi_mn, pi_nm):
@@ -1144,7 +1310,8 @@ def compute_single_om_fused(
     eps=1e-5,
     include_hartree=True,
     include_phonon=False, n_eps=1.0,
-    lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None, faktor=1.0):
+    lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None, faktor=1.0,
+    bubble="exact"):
     Nop = len(thetas)
 
     if not include_phonon:
@@ -1157,9 +1324,15 @@ def compute_single_om_fused(
     I = np.eye(Nop)
 
     # ── single precomputation of bubble for this omega ──────────────────────────
-    pi_mn, pi_nm, piw_mn, piw_nm = precompute_Pi_all(
-        om, energije, Gamma, mu_, invt, nodes, weights, eps, faktor=faktor, n_eps=n_eps
-    )
+    if bubble == "exact":
+        pi_mn, pi_nm, piw_mn, piw_nm = precompute_Pi_all_exact(
+            om, energije, Gamma, mu_ * Gamma, Gamma / invt, faktor=faktor)
+    elif bubble == "quadrature":
+        pi_mn, pi_nm, piw_mn, piw_nm = precompute_Pi_all(
+            om, energije, Gamma, mu_, invt, nodes, weights, eps, faktor=faktor, n_eps=n_eps
+        )
+    else:
+        raise ValueError("bubble must be 'exact' or 'quadrature'")
 
     # ── chi0 matrix ──────────────────
     chi0 = np.zeros((Nop, Nop), dtype=np.complex128)
@@ -1195,10 +1368,48 @@ def compute_single_om_fused(
     chi_rpa = inv @ chi0
     dchi_jj = chi_jrho0 @ thetas_diag @ inv @ chi_rhoj0
     dchi_jjK = chi_jrho0 @ thetas_diag @ inv @ chi_rhojK0
-    dchi_jjE = chi_jrho0 @ thetas_diag @ inv @ chi_rhojE0
     dchi_jmat = chi_jrho0 @ thetas_diag @ inv @ chi_rhomat0
     dchi_jmat_ = chi_jrho0 @ thetas_diag @ inv @ chi_rhomat0_
-    return om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jjK0, dchi_jjK, chi_jjE0, dchi_jjE, chi_jmat0, dchi_jmat, chi_jmat0_, dchi_jmat_, chi_rhoj0
+
+    # ── SB (energy-weighted) vertex correction ──────────────────────────────────────
+    # previous version: energy weight always on the last bubble of the chain. In the DC limit this
+    # puts (e - mu) on static bubbles (whole Fermi sea), which breaks PH symmetry (tekst.tex, Sec. 4-5).
+    dchi_jjE_lastbubble = chi_jrho0 @ thetas_diag @ inv @ chi_rhojE0
+    if include_phonon:
+        # with a complex (phonon) kernel the absorption identity below has an extra Theta'' term,
+        # which has no energy weight; keep the previous formula in that case
+        dchi_jjE = dchi_jjE_lastbubble
+    else:
+        # full RPA, exact at any omega: in the operator space {j, rho_1..rho_Nop}, with
+        # M = 1 - chi0 Theta (Theta = 0 in the j row) and A = (chi - chi^dag)/2i the absorptive part,
+        #     A_full = M^-1 A0 M^-dag            (unweighted: reproduces -Im chi_jj^RPA exactly).
+        # SB form: the absorptive pair carries the energy weight (e - mu + w/2), the full complex RPA
+        # vertex dresses it on both sides:  A^SB = M^-1 A0^(e) M^-dag.
+        chi_jrhoE0 = np.array([chi_UV(Nk, tok_tilde, rhos_tilde[i], piw_mn, piw_nm) for i in range(Nop)])
+        chi0E = np.zeros((Nop, Nop), dtype=np.complex128)
+        for i in range(Nop):
+            for j in range(Nop):
+                chi0E[i, j] = chi_UV(Nk, rhos_tilde[i], rhos_tilde[j], piw_mn, piw_nm)
+        chi0_ext = np.zeros((Nop + 1, Nop + 1), dtype=np.complex128)
+        chi0_ext[0,0] = chi_jj0
+        chi0_ext[0,1:] = chi_jrho0
+        chi0_ext[1:,0] = chi_rhoj0
+        chi0_ext[1:,1:] = chi0
+
+        chi0E_ext = np.zeros((Nop+1,Nop+1), dtype=np.complex128)
+        chi0E_ext[0,0] = chi_jjE0
+        chi0E_ext[0,1:] = chi_jrhoE0
+        chi0E_ext[1:,0] = chi_rhojE0
+        chi0E_ext[1:,1:] = chi0E
+
+        Th_ext = np.diag(np.concatenate(([0.0], np.asarray(thetas_om, dtype=np.complex128))))
+        Minv = LA.inv(np.eye(Nop + 1) - chi0_ext @ Th_ext)
+        A0E = (chi0E_ext - chi0E_ext.conj().T) / 2j
+        AE_full = (Minv @ A0E @ Minv.conj().T)[0, 0]
+        # stored as a complex number whose imaginary part is the absorptive part, so that
+        # -Im(dchi_jjE)/omega is the vertex correction, like for the other dchi's
+        dchi_jjE = 1j * (AE_full - A0E[0, 0])
+    return om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jjK0, dchi_jjK, chi_jjE0, dchi_jjE, chi_jmat0, dchi_jmat, chi_jmat0_, dchi_jmat_, chi_rhoj0, dchi_jjE_lastbubble
 
 ''' susceptibilities for an array of omegas '''
 def compute_chi(
@@ -1212,8 +1423,13 @@ def compute_chi(
     eps=1e-5, n_eps=1.0,
     include_hartree=True,
     include_phonon=False,
-    lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None, faktor=1.0
+    lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None, faktor=1.0,
+    bubble="exact"
 ):
+    ''' bubble="exact": accurate bubbles (precompute_Pi_all_exact, needs T > 0); "quadrature": previous
+        Gauss-Legendre bubbles (nodes, weights, eps, n_eps are only used then).
+        'dchi_jEj' is the SB vertex correction in full RPA with the energy weight on the absorptive pair;
+        'dchi_jEj_lastbubble' is the previous formula (weight on the last bubble), for comparison. '''
     if include_phonon:
         missing = []
         if lam_b is None:
@@ -1260,6 +1476,7 @@ def compute_chi(
     dchi_jmat_arr = np.zeros(N_om, dtype=np.complex128)
     dchi_jmat_arr_ = np.zeros(N_om, dtype=np.complex128)
     dchi_jjE_arr = np.zeros(N_om, dtype=np.complex128)
+    dchi_jjE_last_arr = np.zeros(N_om, dtype=np.complex128)
 
     chi_rhoj0_arr = np.zeros((N_om, Nop), dtype=np.complex128)
 
@@ -1271,39 +1488,52 @@ def compute_chi(
             energije, rhos_tilde,
             eps=eps,
             include_hartree=include_hartree, include_phonon=include_phonon, n_eps=n_eps,
-            lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=Vb, Vc=Vc, Gamma_ph=Gamma_ph, faktor=faktor
+            lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=Vb, Vc=Vc, Gamma_ph=Gamma_ph, faktor=faktor,
+            bubble=bubble
         )
         return om_idx, result
 
-    with ThreadPoolExecutor(max_workers=n_workers) as executor:
-        futures = {
-            executor.submit(_worker, om_idx, om): om_idx
-            for om_idx, om in enumerate(omegas)
-        }
+    # Every omega runs parallel=True numba kernels (bubble, chi_UV). numba's 'workqueue' threading
+    # layer (the only one without TBB/OpenMP installed) aborts when such kernels are launched from
+    # several Python threads at once, so with it the omegas run one after another; the prange loops
+    # over k inside already use all cores. Threads over omega are used only with 'tbb' or 'omp'.
+    numba.get_num_threads()     # starts numba's thread pool, so that threading_layer() is known
+    if numba.threading_layer() == 'workqueue':
+        n_workers = 1
 
-        #with tqdm(total=N_om, desc="omegas", disable=not verbose) as pbar:
-        for future in as_completed(futures):
-            om_idx, result = future.result()
-            om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jjK0, dchi_jjK, chi_jjE0, dchi_jjE, chi_jmat0, dchi_jmat, chi_jmat0_, dchi_jmat_, chi_rhoj0 = result
+    def _results():
+        if n_workers == 1:
+            for om_idx, om in enumerate(omegas):
+                yield _worker(om_idx, om)
+        else:
+            with ThreadPoolExecutor(max_workers=n_workers) as executor:
+                futures = [executor.submit(_worker, om_idx, om) for om_idx, om in enumerate(omegas)]
+                for future in as_completed(futures):
+                    yield future.result()
 
-            chi0_arr[om_idx]      = chi0
-            chi_rpa_arr[om_idx]   = chi_rpa
-            chi_jj0_arr[om_idx]   = chi_jj0
-            dchi_jj_arr[om_idx]   = dchi_jj
-            chi_jjK0_arr[om_idx] = chi_jjK0
-            dchi_jjK_arr[om_idx] = dchi_jjK
-            chi_jjE0_arr[om_idx] = chi_jjE0
-            dchi_jjE_arr[om_idx] = dchi_jjE
-            chi_jmat0_arr[om_idx] = chi_jmat0
-            dchi_jmat_arr[om_idx] = dchi_jmat
-            chi_jmat0_arr_[om_idx] = chi_jmat0_
-            dchi_jmat_arr_[om_idx] = dchi_jmat_
-            chi_rhoj0_arr[om_idx] = chi_rhoj0
+    #with tqdm(total=N_om, desc="omegas", disable=not verbose) as pbar:
+    for om_idx, result in _results():
+        om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jjK0, dchi_jjK, chi_jjE0, dchi_jjE, chi_jmat0, dchi_jmat, chi_jmat0_, dchi_jmat_, chi_rhoj0, dchi_jjE_last = result
+        dchi_jjE_last_arr[om_idx] = dchi_jjE_last
 
-            if verbose:
-                msg = f'Progress: {(om_idx+1)/N_om}'
-                print('\r' + msg + ' ' * (80 - len(msg)), end='', flush=True)
-                
+        chi0_arr[om_idx]      = chi0
+        chi_rpa_arr[om_idx]   = chi_rpa
+        chi_jj0_arr[om_idx]   = chi_jj0
+        dchi_jj_arr[om_idx]   = dchi_jj
+        chi_jjK0_arr[om_idx] = chi_jjK0
+        dchi_jjK_arr[om_idx] = dchi_jjK
+        chi_jjE0_arr[om_idx] = chi_jjE0
+        dchi_jjE_arr[om_idx] = dchi_jjE
+        chi_jmat0_arr[om_idx] = chi_jmat0
+        dchi_jmat_arr[om_idx] = dchi_jmat
+        chi_jmat0_arr_[om_idx] = chi_jmat0_
+        dchi_jmat_arr_[om_idx] = dchi_jmat_
+        chi_rhoj0_arr[om_idx] = chi_rhoj0
+
+        if verbose:
+            msg = f'Progress: {(om_idx+1)/N_om}'
+            print('\r' + msg + ' ' * (80 - len(msg)), end='', flush=True)
+
     results = {'chi0' : chi0_arr,
                'chi' : chi_rpa_arr,
 
@@ -1319,6 +1549,7 @@ def compute_chi(
 
                'dchi_matj' : dchi_jmat_arr,
                'dchi_jEj' : dchi_jjE_arr,
+               'dchi_jEj_lastbubble' : dchi_jjE_last_arr,
                'dchi_matj_' : dchi_jmat_arr_,
 
                'chi_rhoj0' : chi_rhoj0_arr

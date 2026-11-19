@@ -194,13 +194,20 @@ class model:
         self.delta_b, self.delta_c = helpers.Delta(self.K, self.rho, self.Vb, self.Vc)
 
     def run_Tdependence(self, k=None, n=None,
-                        beta=None, scale=None, Nbeta=None, freq_betas=None, impose_additional=True):
-                        
+                        beta=None, scale=None, Nbeta=None, freq_betas=None, impose_additional=False,
+                        add_delta_J2=True, bubble="exact"):
+        ''' impose_additional / add_delta_J2: see velocities(). bubble: "exact" (accurate bubbles in the
+            vertex corrections) or "quadrature" (previous Gauss-Legendre bubbles). '''
+
         ''' read input parameter and initialize the system '''
         config = self.config
 
         evaluate_transport_DC = config.get("evaluate_transport_DC")
         evaluate_vertex_DC = config.get("evaluate_vertex_DC")
+        if evaluate_vertex_DC and self.Gamma_tr != self.Gamma_oc:
+            print(f'Warning: Gamma_tr={self.Gamma_tr} != Gamma_oc={self.Gamma_oc}. The vertex corrections '
+                  'are consistent (e.g. Goldstone mode) only if the ground state uses the same Gamma as the bubbles.',
+                  flush=True)
 
         print('Started to find temperature dependence of transport coefficients.', flush=True)
         if evaluate_transport_DC:
@@ -280,7 +287,7 @@ class model:
                 energy = helpers.energy_average(self.K, self.rho, self.phys_parameters, self.energije, self.mu, self.T)
                 self.mean_energies.append(energy)
 
-                self.velocities(impose_additional=impose_additional)
+                self.velocities(impose_additional=impose_additional, add_delta_J2=add_delta_J2)
 
                 if evaluate_transport_DC and self.Gamma_tr>0.0:
                     ''' DC coefficients: Boltzmann's and Kubo's (evaluated only if Gamma>0), evaluating the bubble diagram (coefficients as integrals of transport functions) '''
@@ -288,7 +295,8 @@ class model:
                 
                 if evaluate_vertex_DC and self.Gamma_tr>0.0:
                     ''' Kubo's DC coefficients, bubble and corrections. evaluated only if Gamma>0 '''
-                    self.DC_bubble_corr(nodes, weights, self.Gamma_tr, omega0, eps2, n_workers=n_workers, n_eps=n_eps)
+                    self.DC_bubble_corr(nodes, weights, self.Gamma_tr, omega0, eps2, n_workers=n_workers, n_eps=n_eps,
+                                        bubble=bubble)
                         
                 if i > 0:
                     self.rho = rho_save
@@ -307,8 +315,16 @@ class model:
         self.mu = mu0
 
     ''' evaluate self-consistent non-local heat current operator, and transform operators into band basis (tilde) '''
-    def velocities(self, impose_deltas=False, impose_additional=True) -> None:
-        self.current_tilde = tokovi.operator_tilde(self.current, self.vecs)
+    def velocities(self, impose_deltas=False, impose_additional=False, add_delta_J2=True, exclude_same_bond=True) -> None:
+        ''' add_delta_J2: add delta_J2_tok to the interaction current (the <n>-subtraction in H_int, P_int).
+            Needed because currentK (jK_tok) contains the Hartree shifts; without it the Hartree energy
+            current is counted twice. impose_additional=True removes the same m3 terms in an ad hoc way
+            (same total), so the two must not be combined. See takarada/latex/tekst.tex. '''
+        if add_delta_J2 and impose_additional:
+            raise ValueError("add_delta_J2=True with impose_additional=True subtracts the Hartree part twice")
+        # current, currentK, mat, mat_ and rhos are hermitian by construction (the separate pieces m3, m6,
+        # m4a, m4b are not); their band-basis forms are made exactly hermitian, see tokovi.hermitian_part
+        self.current_tilde = tokovi.hermitian_part(tokovi.operator_tilde(self.current, self.vecs))
         m3, m6, m4a, m4b, m3_, m6_, m4a_, m4b_ = tokovi.compute_all_mf_matrices(self.K, self.rho, self.geom, self.phases, self.g_ffts,
                                                           impose_additional=impose_additional, impose_deltas=impose_deltas)
         self.mat1_tilde = tokovi.operator_tilde(m3, self.vecs)
@@ -330,11 +346,21 @@ class model:
             self.mat_ = m3_ + m6_ + m4a_ + m4b_
             self.mat_tilde = self.mat1_tilde + self.mat2_tilde + self.mat3_tilde + self.mat4_tilde
             self.mat_tilde_ = self.mat1_tilde_ + self.mat2_tilde_ + self.mat3_tilde_ + self.mat4_tilde_
-        self.rhos_tilde = tokovi.operator_tilde(self.rhos, self.vecs)
+        if add_delta_J2:
+            dJ, dJ_ = tokovi.delta_J2_tok(self.K, self.rho, self.pos, self.kinetic, self.interaction, exclude_same_bond=exclude_same_bond)
+            self.dJ2_tilde = tokovi.operator_tilde(dJ, self.vecs)
+            self.dJ2_tilde_ = tokovi.operator_tilde(dJ_, self.vecs)
+            self.mat = self.mat + dJ
+            self.mat_ = self.mat_ + dJ_
+            self.mat_tilde = self.mat_tilde + self.dJ2_tilde
+            self.mat_tilde_ = self.mat_tilde_ + self.dJ2_tilde_    # same as mat_ (bare) above
+        self.mat_tilde = tokovi.hermitian_part(self.mat_tilde)
+        self.mat_tilde_ = tokovi.hermitian_part(self.mat_tilde_)
+        self.rhos_tilde = tokovi.hermitian_part(tokovi.operator_tilde(self.rhos, self.vecs))
         hartree_shift0 = (self.Vb + self.Vc) * np.sum(self.rho[1,1]).real / self.Nk
         hartree_shift1 = (self.Vb + self.Vc) * np.sum(self.rho[0,0]).real / self.Nk
         self.currentK = tokovi.jK_tok(self.K, self.pos, self.kinetic, self.epsilon, self.epsilon_, self.mu, hartree_shift0, hartree_shift1)
-        self.currentK_tilde = tokovi.operator_tilde(self.currentK, self.vecs)
+        self.currentK_tilde = tokovi.hermitian_part(tokovi.operator_tilde(self.currentK, self.vecs))
 
     def transport_functions(self, epsilons, Gamma, dict_form=None):
         spektralka = tokovi.Spektralka(epsilons, self.mu, self.energije, Gamma)
@@ -380,12 +406,16 @@ class model:
         self.L12q.append(l12q_.real)
         self.L12q_.append(l12q__.real)
 
-    def DC_bubble_corr(self, nodes, weights, Gamma, omega0, eps, n_workers=None, n_eps=1.0):
+    def DC_bubble_corr(self, nodes, weights, Gamma, omega0, eps, n_workers=None, n_eps=1.0, bubble="exact"):
+        ''' L12_0/L12_corr: SB form (energy-weighted bubble). Its vertex correction is the full-RPA
+            formula with the energy weight on the absorptive pair (tokovi.compute_single_om_fused).
+            L12K, L12q, L12q_: Kubo form with the heat-current operators from velocities(). '''
 
         mu_ = self.mu / Gamma
         invt = Gamma / self.T
-        
-        results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.mat_tilde_, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers, n_eps=n_eps)
+
+        results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.mat_tilde_, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers, n_eps=n_eps,
+                                     bubble=bubble)
         
         Chi_jj0 = - results['chi_jj0'].imag
         dChi_jj  = - results['dchi_jj'].imag
@@ -447,7 +477,7 @@ class model:
 
     def optical_response(self, Gamma=None,
                          include_phonon=False, lam_b=None, om_b=None, lam_c=None, om_c=None, Gamma_ph=None, faktor=1.0,
-                         deg=None, eps=None, n_eps=None):
+                         deg=None, eps=None, n_eps=None, bubble="exact"):
         print('\n' + '-' * 80 + '\n' + \
               'Started calculation of RPA responses.', flush=True)
         params = self.config.get("params_RPA")
@@ -480,11 +510,12 @@ class model:
         invt = Gamma / self.T
         if not include_phonon:
             results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.mat_tilde_, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps, faktor=faktor, n_eps=n_eps,
-                                         include_hartree=self.include_hartree)
+                                         include_hartree=self.include_hartree, bubble=bubble)
         elif include_phonon:
             results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.mat_tilde_, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps,
                                              include_hartree=self.include_hartree, include_phonon=include_phonon, n_eps=n_eps,
-                                             lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=self.Vb, Vc=self.Vc, Gamma_ph=Gamma_ph,faktor=faktor,)
+                                             lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=self.Vb, Vc=self.Vc, Gamma_ph=Gamma_ph,faktor=faktor,
+                                             bubble=bubble)
 
         results["Gamma"] = Gamma
         results["T"] = self.T
@@ -494,11 +525,14 @@ class model:
         return results
 
     def simulate_perturbation(self, do_freeze=None, Gamma_=None, dt=None, t_max=None, add_diagonals=None,
-                              *, impose_deltas=False, impose_additional=True,
+                              *, impose_deltas=False, impose_additional=False, add_delta_J2=True,
                               interaction_current_mode="equilibrium"):
         """Run frozen or self-consistent HF dynamics under a current pulse.
 
         The interaction-current flags match velocities() by default.
+        add_delta_J2 adds delta_J2_tok with <n> fixed at the equilibrium self.rho
+        (these <n> are constants of H_int), so in 'instantaneous' mode it is added
+        without the 0.5 of the nonlinear vertex.
         With measure_provider='all_three', rows are charge current, kinetic
         heat current, and the two interaction heat currents, in that order.
         interaction_current_mode='equilibrium' measures the fixed full
@@ -544,12 +578,16 @@ class model:
         else:
             print("Choose a valid perturbation operator. Currently available : current", flush=True)
         
+        if add_delta_J2 and impose_additional:
+            raise ValueError("add_delta_J2=True with impose_additional=True subtracts the Hartree part twice")
+
         if interaction_current_mode == "equilibrium":
             interaction_current_eq = np.stack(
                 tokovi.compute_equilibrium_interaction_current(
                     self.K, self.rho, self.geom, self.phases, self.g_ffts,
                     impose_deltas=impose_deltas,
-                    impose_additional=impose_additional),
+                    impose_additional=impose_additional,
+                    add_delta_J2=add_delta_J2),
                 axis=0)
 
             def interaction_current(K, rho, geom, phases, g_ffts,
@@ -557,12 +595,17 @@ class model:
                 # Keep these as a provider so both rows follow the static-row order.
                 return interaction_current_eq
         else:
+            if add_delta_J2:
+                dJ2_eq = np.stack(tokovi.delta_J2_tok(self.K, self.rho, self.pos, self.kinetic, self.interaction), axis=0)
+            else:
+                dJ2_eq = 0.0
+
             def interaction_current(K, rho, geom, phases, g_ffts,
                                     impose_deltas, impose_additional):
                 return tokovi.compute_together_mf_matrices(
                     K, rho, geom, phases, g_ffts,
                     impose_deltas=impose_deltas,
-                    impose_additional=impose_additional)
+                    impose_additional=impose_additional) + dJ2_eq
 
         if params["measure_provider"] == 'current':
             measure_provider = self.current
