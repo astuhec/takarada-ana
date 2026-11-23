@@ -1370,46 +1370,9 @@ def compute_single_om_fused(
     dchi_jjK = chi_jrho0 @ thetas_diag @ inv @ chi_rhojK0
     dchi_jmat = chi_jrho0 @ thetas_diag @ inv @ chi_rhomat0
     dchi_jmat_ = chi_jrho0 @ thetas_diag @ inv @ chi_rhomat0_
+    dchi_jjE = chi_jrho0 @ thetas_diag @ inv @ chi_rhojE0
 
-    # ── SB (energy-weighted) vertex correction ──────────────────────────────────────
-    # previous version: energy weight always on the last bubble of the chain. In the DC limit this
-    # puts (e - mu) on static bubbles (whole Fermi sea), which breaks PH symmetry (tekst.tex, Sec. 4-5).
-    dchi_jjE_lastbubble = chi_jrho0 @ thetas_diag @ inv @ chi_rhojE0
-    if include_phonon:
-        # with a complex (phonon) kernel the absorption identity below has an extra Theta'' term,
-        # which has no energy weight; keep the previous formula in that case
-        dchi_jjE = dchi_jjE_lastbubble
-    else:
-        # full RPA, exact at any omega: in the operator space {j, rho_1..rho_Nop}, with
-        # M = 1 - chi0 Theta (Theta = 0 in the j row) and A = (chi - chi^dag)/2i the absorptive part,
-        #     A_full = M^-1 A0 M^-dag            (unweighted: reproduces -Im chi_jj^RPA exactly).
-        # SB form: the absorptive pair carries the energy weight (e - mu + w/2), the full complex RPA
-        # vertex dresses it on both sides:  A^SB = M^-1 A0^(e) M^-dag.
-        chi_jrhoE0 = np.array([chi_UV(Nk, tok_tilde, rhos_tilde[i], piw_mn, piw_nm) for i in range(Nop)])
-        chi0E = np.zeros((Nop, Nop), dtype=np.complex128)
-        for i in range(Nop):
-            for j in range(Nop):
-                chi0E[i, j] = chi_UV(Nk, rhos_tilde[i], rhos_tilde[j], piw_mn, piw_nm)
-        chi0_ext = np.zeros((Nop + 1, Nop + 1), dtype=np.complex128)
-        chi0_ext[0,0] = chi_jj0
-        chi0_ext[0,1:] = chi_jrho0
-        chi0_ext[1:,0] = chi_rhoj0
-        chi0_ext[1:,1:] = chi0
-
-        chi0E_ext = np.zeros((Nop+1,Nop+1), dtype=np.complex128)
-        chi0E_ext[0,0] = chi_jjE0
-        chi0E_ext[0,1:] = chi_jrhoE0
-        chi0E_ext[1:,0] = chi_rhojE0
-        chi0E_ext[1:,1:] = chi0E
-
-        Th_ext = np.diag(np.concatenate(([0.0], np.asarray(thetas_om, dtype=np.complex128))))
-        Minv = LA.inv(np.eye(Nop + 1) - chi0_ext @ Th_ext)
-        A0E = (chi0E_ext - chi0E_ext.conj().T) / 2j
-        AE_full = (Minv @ A0E @ Minv.conj().T)[0, 0]
-        # stored as a complex number whose imaginary part is the absorptive part, so that
-        # -Im(dchi_jjE)/omega is the vertex correction, like for the other dchi's
-        dchi_jjE = 1j * (AE_full - A0E[0, 0])
-    return om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jjK0, dchi_jjK, chi_jjE0, dchi_jjE, chi_jmat0, dchi_jmat, chi_jmat0_, dchi_jmat_, chi_rhoj0, dchi_jjE_lastbubble
+    return om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jjK0, dchi_jjK, chi_jjE0, dchi_jjE, chi_jmat0, dchi_jmat, chi_jmat0_, dchi_jmat_, chi_rhoj0
 
 ''' susceptibilities for an array of omegas '''
 def compute_chi(
@@ -1476,7 +1439,6 @@ def compute_chi(
     dchi_jmat_arr = np.zeros(N_om, dtype=np.complex128)
     dchi_jmat_arr_ = np.zeros(N_om, dtype=np.complex128)
     dchi_jjE_arr = np.zeros(N_om, dtype=np.complex128)
-    dchi_jjE_last_arr = np.zeros(N_om, dtype=np.complex128)
 
     chi_rhoj0_arr = np.zeros((N_om, Nop), dtype=np.complex128)
 
@@ -1511,10 +1473,8 @@ def compute_chi(
                 for future in as_completed(futures):
                     yield future.result()
 
-    #with tqdm(total=N_om, desc="omegas", disable=not verbose) as pbar:
     for om_idx, result in _results():
-        om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jjK0, dchi_jjK, chi_jjE0, dchi_jjE, chi_jmat0, dchi_jmat, chi_jmat0_, dchi_jmat_, chi_rhoj0, dchi_jjE_last = result
-        dchi_jjE_last_arr[om_idx] = dchi_jjE_last
+        om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jjK0, dchi_jjK, chi_jjE0, dchi_jjE, chi_jmat0, dchi_jmat, chi_jmat0_, dchi_jmat_, chi_rhoj0 = result
 
         chi0_arr[om_idx]      = chi0
         chi_rpa_arr[om_idx]   = chi_rpa
@@ -1549,10 +1509,9 @@ def compute_chi(
 
                'dchi_matj' : dchi_jmat_arr,
                'dchi_jEj' : dchi_jjE_arr,
-               'dchi_jEj_lastbubble' : dchi_jjE_last_arr,
                'dchi_matj_' : dchi_jmat_arr_,
 
-               'chi_rhoj0' : chi_rhoj0_arr
+               'chi_rhoj0' : chi_rhoj0_arr,
                }
     
     return results

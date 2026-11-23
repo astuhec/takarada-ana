@@ -315,7 +315,7 @@ class model:
         self.mu = mu0
 
     ''' evaluate self-consistent non-local heat current operator, and transform operators into band basis (tilde) '''
-    def velocities(self, impose_deltas=False, impose_additional=False, add_delta_J2=True, exclude_same_bond=True) -> None:
+    def velocities(self, impose_deltas=False, impose_additional=False, add_delta_J2=True, exclude_same_bond=False) -> None:
         ''' add_delta_J2: add delta_J2_tok to the interaction current (the <n>-subtraction in H_int, P_int).
             Needed because currentK (jK_tok) contains the Hartree shifts; without it the Hartree energy
             current is counted twice. impose_additional=True removes the same m3 terms in an ad hoc way
@@ -353,7 +353,7 @@ class model:
             self.mat = self.mat + dJ
             self.mat_ = self.mat_ + dJ_
             self.mat_tilde = self.mat_tilde + self.dJ2_tilde
-            self.mat_tilde_ = self.mat_tilde_ + self.dJ2_tilde_    # same as mat_ (bare) above
+            self.mat_tilde_ = self.mat_tilde_ + self.dJ2_tilde_ 
         self.mat_tilde = tokovi.hermitian_part(self.mat_tilde)
         self.mat_tilde_ = tokovi.hermitian_part(self.mat_tilde_)
         self.rhos_tilde = tokovi.hermitian_part(tokovi.operator_tilde(self.rhos, self.vecs))
