@@ -288,7 +288,7 @@ def compute_together_mf_matrices(K, rho, geom, phases, g_ffts,
         impose_additional=impose_additional)
     return 0.5 * np.stack((interaction_current, interaction_current_), axis=0)
 
-def delta_J2_tok(K, rho, pos, kinetic, interaction, exclude_same_bond=True):
+def delta_J2_tok(K, rho, pos, kinetic, interaction, exclude_same_bond=False):
     ''' Change of J2 under n -> n - <n> in H_int and P_int: dJ2 (p-terms, interaction-bond vector, goes
         with mat) and dJ2_ (mu-terms, kinetic-bond vector, goes with mat_); dJ2 = -m3, dJ2_ = -m3_.
         exclude_same_bond: for each hopping line (x,a,b) leave out the interaction lines on the same bond,
