@@ -1311,7 +1311,8 @@ def compute_single_om_fused(
     include_hartree=True,
     include_phonon=False, n_eps=1.0,
     lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None, faktor=1.0,
-    bubble="exact"):
+    bubble="exact",
+    s_sb=None):
     Nop = len(thetas)
 
     if not include_phonon:
@@ -1370,7 +1371,11 @@ def compute_single_om_fused(
     dchi_jjK = chi_jrho0 @ thetas_diag @ inv @ chi_rhojK0
     dchi_jmat = chi_jrho0 @ thetas_diag @ inv @ chi_rhomat0
     dchi_jmat_ = chi_jrho0 @ thetas_diag @ inv @ chi_rhomat0_
-    dchi_jjE = chi_jrho0 @ thetas_diag @ inv @ chi_rhojE0
+
+    # s_sb: same-bond (Pauli-forbidden) exchange half of the omega-independent constant in chi_rhojE0;
+    # subtract it whenever exclude_same_bond=True removed the Hartree half from mat (see same-bond.tex)
+    rhs = chi_rhojE0 if s_sb is None else chi_rhojE0 - s_sb
+    dchi_jjE = chi_jrho0 @ thetas_diag @ inv @ rhs
 
     return om, chi0, chi_rpa, chi_jj0, dchi_jj, chi_jjK0, dchi_jjK, chi_jjE0, dchi_jjE, chi_jmat0, dchi_jmat, chi_jmat0_, dchi_jmat_, chi_rhoj0
 
@@ -1387,7 +1392,8 @@ def compute_chi(
     include_hartree=True,
     include_phonon=False,
     lam_b=None, om_b=None, lam_c=None, om_c=None, Vb=None, Vc=None, Gamma_ph=None, faktor=1.0,
-    bubble="exact"
+    bubble="exact",
+    s_sb=None
 ):
     ''' bubble="exact": accurate bubbles (precompute_Pi_all_exact, needs T > 0); "quadrature": previous
         Gauss-Legendre bubbles (nodes, weights, eps, n_eps are only used then).
@@ -1451,7 +1457,7 @@ def compute_chi(
             eps=eps,
             include_hartree=include_hartree, include_phonon=include_phonon, n_eps=n_eps,
             lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=Vb, Vc=Vc, Gamma_ph=Gamma_ph, faktor=faktor,
-            bubble=bubble
+            bubble=bubble, s_sb=s_sb
         )
         return om_idx, result
 

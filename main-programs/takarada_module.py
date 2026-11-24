@@ -16,7 +16,8 @@ class model:
     def __init__(self, input_file, compute_gap_infty=False, verbose=True, Nk=None,
                  b=None, t=None, t_=None, t12=None, epsilon=None, epsilon_=None, Vb=None, Vc=None, delta=None, mazza=None, delta_mazza=None,
                  Gamma_tr=None, Gamma_oc=None,
-                 fixedhk0=None, hk0_input=None, rho=None):
+                 fixedhk0=None, hk0_input=None, rho=None,
+                 include_hartree2=None):
 
         self.mazza=mazza
         self.delta_mazza=delta_mazza
@@ -120,7 +121,7 @@ class model:
                 f'Occupation is {np.round(self.n, 5)}' + '\n' + '=' * 80, flush=True
                 )
         self.current = tokovi.j_tok(self.K, self.pos, self.kinetic)
-        self.rhos, self.thetas = tokovi.rho_operators(self.K, self.Vb, self.Vc, self.include_hartree)
+        self.rhos, self.thetas = tokovi.rho_operators(self.K, self.Vb, self.Vc, include_hartree2)
         self.geom, self.phases = tokovi.input_data(self.K, self.pos, self.kinetic, self.interaction)
         self.g_ffts = tokovi.G_ffts(self.phases, self.Nk)
 
@@ -315,7 +316,7 @@ class model:
         self.mu = mu0
 
     ''' evaluate self-consistent non-local heat current operator, and transform operators into band basis (tilde) '''
-    def velocities(self, impose_deltas=False, impose_additional=False, add_delta_J2=True, exclude_same_bond=False) -> None:
+    def velocities(self, impose_deltas=False, impose_additional=False, add_delta_J2=True, exclude_same_bond=True) -> None:
         ''' add_delta_J2: add delta_J2_tok to the interaction current (the <n>-subtraction in H_int, P_int).
             Needed because currentK (jK_tok) contains the Hartree shifts; without it the Hartree energy
             current is counted twice. impose_additional=True removes the same m3 terms in an ad hoc way
@@ -335,6 +336,13 @@ class model:
         self.mat2_tilde_ = tokovi.operator_tilde(m6_, self.vecs)
         self.mat3_tilde_ = tokovi.operator_tilde(m4a_, self.vecs)
         self.mat4_tilde_ = tokovi.operator_tilde(m4b_, self.vecs)
+
+        Norb = self.rho.shape[0]
+        nbar = np.array([np.sum(self.rho[a, a]).real for a in range(Norb)]) / self.Nk
+        anti = 0.5 * (np.einsum('nijk,jlk->nilk', self.rhos, self.current)
+                    + np.einsum('ijk,njlk->nilk', self.current, self.rhos))
+        s_sb = np.einsum('a,naak->n', nbar, anti).real / self.Nk
+        self.s_sb = s_sb if exclude_same_bond else np.zeros_like(s_sb)
 
         if impose_additional:
             self.mat = m6 + m4a + m4b
@@ -415,7 +423,7 @@ class model:
         invt = Gamma / self.T
 
         results = tokovi.compute_chi(omega0, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.mat_tilde_, self.energije, self.rhos_tilde, verbose=True, eps=eps, n_workers=n_workers, n_eps=n_eps,
-                                     bubble=bubble)
+                                     bubble=bubble, s_sb=self.s_sb)
         
         Chi_jj0 = - results['chi_jj0'].imag
         dChi_jj  = - results['dchi_jj'].imag
@@ -510,12 +518,12 @@ class model:
         invt = Gamma / self.T
         if not include_phonon:
             results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.mat_tilde_, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps, faktor=faktor, n_eps=n_eps,
-                                         include_hartree=self.include_hartree, bubble=bubble)
+                                         include_hartree=self.include_hartree, bubble=bubble, s_sb=self.s_sb)
         elif include_phonon:
             results = tokovi.compute_chi(omegas, self.Nk, Gamma, mu_, invt, nodes, weights, self.thetas, self.current_tilde, self.currentK_tilde, self.mat_tilde, self.mat_tilde_, self.energije, self.rhos_tilde, verbose=True, n_workers=n_workers, eps=eps,
                                              include_hartree=self.include_hartree, include_phonon=include_phonon, n_eps=n_eps,
                                              lam_b=lam_b, om_b=om_b, lam_c=lam_c, om_c=om_c, Vb=self.Vb, Vc=self.Vc, Gamma_ph=Gamma_ph,faktor=faktor,
-                                             bubble=bubble)
+                                             bubble=bubble, s_sb=self.s_sb)
 
         results["Gamma"] = Gamma
         results["T"] = self.T
