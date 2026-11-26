@@ -984,7 +984,7 @@ def rho_operators(K, Vb, Vc, include_hartree):
             thetas = thetas[:4]
         nus = [0, 1, 2, 3]
     else:
-        thetas = np.array([Vb/2, -Vb/2, -Vc/2, -Vc/2])
+        thetas = np.array([-Vb/2, -Vb/2, -Vc/2, -Vc/2])
         if Vc == 0:
             thetas = thetas[:2]
         nus = [1, 2]

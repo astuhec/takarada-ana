@@ -23,6 +23,8 @@ def parameters(b, t, t_, t12, Vb, Vc, delta=0):
         (-1, 1, 1, -t_),
         (0, 0, 1, t12 + delta),
         (0, 1, 0, t12 + delta),
+        #(1,0,1,t12),
+        #(-1,1,0,t12)
         # onsite energies don't matter for current operators !
         #(0, 0, 0, epsilon - mu),
         #(0, 1, 1, epsilon_ - mu) 

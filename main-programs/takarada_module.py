@@ -17,7 +17,7 @@ class model:
                  b=None, t=None, t_=None, t12=None, epsilon=None, epsilon_=None, Vb=None, Vc=None, delta=None, mazza=None, delta_mazza=None,
                  Gamma_tr=None, Gamma_oc=None,
                  fixedhk0=None, hk0_input=None, rho=None,
-                 include_hartree2=None):
+                 include_hartree2=None, include_hartree=None):
 
         self.mazza=mazza
         self.delta_mazza=delta_mazza
@@ -70,7 +70,7 @@ class model:
         self.max_trials = self.parameters['max_trials']
 
         self.mu = config.get("mu0")
-        self.include_hartree = config.get("include_hartree")
+        self.include_hartree = config.get("include_hartree") if include_hartree==None else include_hartree
         self.n_target = config.get("n_target", 1.0)
         if not np.isfinite(self.n_target) or not 0 < self.n_target < 2:
             raise ValueError("n_target must be strictly between 0 and 2")
@@ -343,6 +343,7 @@ class model:
                     + np.einsum('ijk,njlk->nilk', self.current, self.rhos))
         s_sb = np.einsum('a,naak->n', nbar, anti).real / self.Nk
         self.s_sb = s_sb if exclude_same_bond else np.zeros_like(s_sb)
+        print(self.s_sb)
 
         if impose_additional:
             self.mat = m6 + m4a + m4b
