@@ -196,7 +196,7 @@ class model:
 
     def run_Tdependence(self, k=None, n=None,
                         beta=None, scale=None, Nbeta=None, freq_betas=None, impose_additional=False,
-                        add_delta_J2=True, bubble="exact"):
+                        add_delta_J2=True, bubble="exact", impose_deltas=True, exclude_same_bond=True):
         ''' impose_additional / add_delta_J2: see velocities(). bubble: "exact" (accurate bubbles in the
             vertex corrections) or "quadrature" (previous Gauss-Legendre bubbles). '''
 
@@ -288,7 +288,7 @@ class model:
                 energy = helpers.energy_average(self.K, self.rho, self.phys_parameters, self.energije, self.mu, self.T)
                 self.mean_energies.append(energy)
 
-                self.velocities(impose_additional=impose_additional, add_delta_J2=add_delta_J2)
+                self.velocities(impose_additional=impose_additional, add_delta_J2=add_delta_J2, impose_deltas=impose_deltas, exclude_same_bond=exclude_same_bond)
 
                 if evaluate_transport_DC and self.Gamma_tr>0.0:
                     ''' DC coefficients: Boltzmann's and Kubo's (evaluated only if Gamma>0), evaluating the bubble diagram (coefficients as integrals of transport functions) '''
@@ -342,8 +342,8 @@ class model:
         anti = 0.5 * (np.einsum('nijk,jlk->nilk', self.rhos, self.current)
                     + np.einsum('ijk,njlk->nilk', self.current, self.rhos))
         s_sb = np.einsum('a,naak->n', nbar, anti).real / self.Nk
-        self.s_sb = s_sb if exclude_same_bond else np.zeros_like(s_sb)
-        print(self.s_sb)
+        hartree_half_in_mat = add_delta_J2 and not exclude_same_bond
+        self.s_sb = np.zeros_like(s_sb) if hartree_half_in_mat else s_sb
 
         if impose_additional:
             self.mat = m6 + m4a + m4b
